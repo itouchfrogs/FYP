@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>All Players</title>
+</head>
+<body>
+
+    <h1>All Players</h1>
+
+    <a href="/">Home</a>
+    <a href="/players/add">Add Player</a>
+
+    <hr>
+
+    <% if (players.length === 0) { %>
+
+        <p>No players found.</p>
+
+    <% } %>
+
+    <% players.forEach(player => { %>
+
+        <div style="border:1px solid black; padding:10px; margin-bottom:10px;">
+
+            <h3><%= player.name %></h3>
+
+            <p><strong>Age:</strong> <%= player.age %></p>
+
+            <p><strong>Email:</strong> <%= player.email %></p>
+
+            <p><strong>Username:</strong> <%= player.username %></p>
+
+            <p><strong>Team:</strong> <%= player.teamName %></p>
+
+            <p><strong>Role:</strong> <%= player.role %></p>
+
+            <form
+                action="/players/delete/<%= player.playerId %>"
+                method="POST"
+            >
+
+                <button type="submit">
+                    Delete Player
+                </button>
+
+            </form>
+
+        </div>
+
+    <% }) %>
+
+</body>
+</html>
