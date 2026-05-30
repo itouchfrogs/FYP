@@ -72,26 +72,12 @@ app.get("/", (req, res) => {
 // SHOW ALL PLAYERS
 // =========================
 
-app.get("/players", async (req, res) => {
+app.get('/', (req, res) => {
+    res.send('Home Page');
+});
 
-    try {
-
-        const [players] = await pool.execute(`
-            SELECT *
-            FROM player
-            ORDER BY playerId DESC
-        `);
-
-        res.render("players", { players });
-
-    } catch (err) {
-
-        console.error(err);
-
-        res.status(500).send("Error loading players");
-
-    }
-
+app.get('/players', (req, res) => {
+    res.send('Players Page');
 });
 
 // =========================
