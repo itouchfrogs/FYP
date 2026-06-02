@@ -22,13 +22,35 @@
 
         <div style="border:1px solid black; padding:10px; margin-bottom:10px;">
 
-            <h3><%= player.name %></h3>
+            <h3><%= player.username %></h3>
+
+            <p><strong>Name:</strong> <%= player.name %></p>
 
             <p><strong>Age:</strong> <%= player.age %></p>
 
-            <p><strong>Email:</strong> <%= player.email %></p>
+            <p>
+                <strong>Email:</strong>
 
-            <p><strong>Username:</strong> <%= player.username %></p>
+                <%
+                    const email = player.email || '';
+
+                    const at = email.indexOf('@');
+
+                    let maskedEmail = email;
+
+                    if (at > 0) {
+
+                        const name = email.slice(0, at);
+
+                        const domain = email.slice(at);
+
+                        maskedEmail =
+                            name[0] + '*****' + domain;
+                        }
+                %>
+
+                <%= maskedEmail %>
+            </p>
 
             <p><strong>Team:</strong> <%= player.teamName %></p>
 
