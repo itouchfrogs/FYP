@@ -89,7 +89,7 @@ app.get("/", (req, res) => {
 app.get('/players', async (req, res) => {
     try {
         const [players] = await pool.execute(`
-            SELECT playerId, name, age, email, username, teamName, role, region, swappedData AS swappedRegion
+            SELECT playerId, name, age, email, username, teamName, role, region, swappedRegion AS swappedRegion
             FROM player
             ORDER BY teamName ASC
         `);
@@ -200,7 +200,7 @@ app.post("/players/add", async (req, res) => {
                 address,
                 postalCode,
                 region,
-                swappedData,
+                swappedRegion,
                 country,
                 teamName,
                 role,
