@@ -22,9 +22,7 @@
 
         <div style="border:1px solid black; padding:10px; margin-bottom:10px;">
 
-            <h3><%= player.username %></h3>
-
-            <p><strong>Name:</strong> <%= player.name %></p>
+            <h3><%= player.name %></h3>
 
             <p><strong>Age:</strong> <%= player.age %></p>
 
@@ -51,10 +49,16 @@
 
                 <%= maskedEmail %>
             </p>
+            
+            <p><strong>Username:</strong> <%= player.username %></p>
 
             <p><strong>Team:</strong> <%= player.teamName %></p>
 
             <p><strong>Role:</strong> <%= player.role %></p>
+
+            <p><strong>Region:</strong> <%= player.region %></p>
+
+            <p><strong>SwappedRegion:</strong> <%= player.swappedRegion || 'N/A' %></p>
 
             <form
                 action="/players/delete/<%= player.playerId %>"
