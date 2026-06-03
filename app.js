@@ -68,6 +68,14 @@ app.use(express.urlencoded({ extended: false }));
 // HOME
 // =========================
 
+function moveFieldToEnd(obj, fieldName) {
+    if (obj && typeof obj === 'object' && fieldName in obj) {
+        const value = obj[fieldName];
+        delete obj[fieldName];
+        obj[fieldName] = value;
+    }
+}
+
 app.get("/", (req, res) => {
 
     res.render("home");
@@ -81,11 +89,12 @@ app.get("/", (req, res) => {
 app.get('/players', async (req, res) => {
     try {
         const [players] = await pool.execute(`
-            SELECT playerId, name, age, email, username, teamName, role
+            SELECT playerId, name, age, email, username, teamName, role, region, swappedData AS swappedRegion
             FROM player
             ORDER BY teamName ASC
         `);
 
+        console.log('DEBUG: rendering players view, players count=', players.length);
         res.render('players', { players });
     } catch (err) {
         console.error('Error loading players:', err);
@@ -98,7 +107,6 @@ app.get('/players', async (req, res) => {
 // =========================
 
 app.get("/players/add", async (req, res) => {
-
     try {
 
         const [teams] = await pool.execute(`
@@ -129,6 +137,10 @@ app.post("/players/add", async (req, res) => {
 
     try {
 
+        // normalize/move region fields if provided under different names
+        moveFieldToEnd(req.body, 'region');
+        moveFieldToEnd(req.body, 'singaporeRegion');
+
         const {
 
             name,
@@ -149,6 +161,30 @@ app.post("/players/add", async (req, res) => {
 
         } = req.body;
 
+        const regionValue = singaporeRegion || req.body.region || '';
+
+        let swappedRegionValue = regionValue;
+
+        const [existingPlayers] = await pool.execute(`
+            SELECT playerId, region
+            FROM player
+            WHERE region IS NOT NULL AND region != ''
+            ORDER BY RAND()
+            LIMIT 1
+        `);
+
+        if (existingPlayers.length > 0) {
+            const existing = existingPlayers[0];
+            if (existing.region && existing.region !== '') {
+                swappedRegionValue = existing.region;
+                await pool.execute(`
+                    UPDATE player
+                    SET region = ?
+                    WHERE playerId = ?
+                `, [regionValue, existing.playerId]);
+            }
+        }
+
         await pool.execute(`
 
             INSERT INTO player (
@@ -164,6 +200,7 @@ app.post("/players/add", async (req, res) => {
                 address,
                 postalCode,
                 region,
+                swappedData,
                 country,
                 teamName,
                 role,
@@ -171,7 +208,7 @@ app.post("/players/add", async (req, res) => {
 
             )
 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 
         `, [
 
@@ -185,7 +222,8 @@ app.post("/players/add", async (req, res) => {
             serverId,
             address,
             postalCode,
-            singaporeRegion,
+            regionValue,
+            swappedRegionValue,
             country,
             teamName,
             role,
