@@ -60,6 +60,8 @@
 
             <p><strong>SwappedRegion:</strong> <%= player.swappedRegion || 'N/A' %></p>
 
+            <p><strong>ServerId:</strong> <%= player.serverId || 'N/A' %></p>
+
             <form
                 action="/players/delete/<%= player.playerId %>"
                 method="POST"
