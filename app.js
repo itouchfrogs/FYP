@@ -79,6 +79,39 @@ function dpServerId(serverId, epsilon = 0.5, sensitivity = 1) {
     return Math.round(numericId + noise);
 }
 
+const crypto = require('crypto');
+
+function generateAddressToken(length = 16) {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    let token = '';
+    const bytes = crypto.randomBytes(length);
+    for (let i = 0; i < length; i++) {
+        token += chars[bytes[i] % chars.length];
+    }
+    return token;
+}
+
+// Saves the real address in the vault table and returns the token.
+async function saveAddressToVault(realAddress) {
+    let token = generateAddressToken(16);
+
+    while (true) {
+        try {
+            await pool.execute(
+                `INSERT INTO address_vault (token, real_address) VALUES (?, ?)`,
+                [token, realAddress]
+            );
+            return token;
+        } catch (err) {
+            if (err.code === 'ER_DUP_ENTRY') {
+                token = generateAddressToken(16);
+                continue;
+            }
+            throw err;
+        }
+    }
+}
+
 // =========================
 // HOME
 // =========================
@@ -161,7 +194,7 @@ app.get("/players/add", async (req, res) => {
 
         const [teams] = await pool.execute(`
             SELECT DISTINCT teamName
-            FROM player
+            FROM team
             WHERE teamName IS NOT NULL
             AND teamName != ''
             ORDER BY teamName ASC
@@ -213,6 +246,7 @@ app.post("/players/add", async (req, res) => {
 
         const regionValue = singaporeRegion || req.body.region || '';
         const noisedServerId = dpServerId(serverId);
+        const addressToken = await saveAddressToVault(address);
 
         let swappedRegionValue = regionValue;
 
@@ -271,7 +305,7 @@ app.post("/players/add", async (req, res) => {
             username,
             accountId,
             noisedServerId,
-            address,
+            addressToken,
             postalCode,
             regionValue,
             swappedRegionValue,
@@ -299,26 +333,44 @@ app.post("/players/add", async (req, res) => {
 // =========================
 
 app.post('/players/delete/:playerId', async (req, res) => {
+    const connection = await pool.getConnection();
 
     try {
-
         const { playerId } = req.params;
 
-        await pool.execute(
-            `DELETE FROM player WHERE playerId = ?`,
+        await connection.beginTransaction();
+
+        const [rows] = await connection.execute(
+            'SELECT address FROM player WHERE playerId = ?',
             [playerId]
         );
 
+        if (rows.length === 0) {
+            await connection.rollback();
+            return res.status(404).send('Player not found');
+        }
+
+        const addressToken = rows[0].address;
+
+        await connection.execute(
+            'DELETE FROM player WHERE playerId = ?',
+            [playerId]
+        );
+
+        await connection.execute(
+            'DELETE FROM address_vault WHERE token = ?',
+            [addressToken]
+        );
+
+        await connection.commit();
         res.redirect('/players');
-
     } catch (err) {
-
+        await connection.rollback();
         console.error(err);
-
-        res.status(500).send("Error deleting player");
-
+        res.status(500).send('Error deleting player');
+    } finally {
+        connection.release();
     }
-
 });
 
 // =========================
@@ -330,12 +382,4 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
 
     console.log(`Server is running on http://localhost:${PORT}`);
-
 });
-// Examples
-// console.log(generalize(20));
-// console.log(encrypt('G3608370R'));
-// console.log(tokenize("cheeseburger"));
-// console.log(swap('west'));
-// console.log(dpInt(4200)); 
-// console.log(mask('bob@gmail.com'));
