@@ -64,6 +64,21 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 app.use(express.urlencoded({ extended: false }));
 
+function laplaceNoise(scale) {
+    const u = Math.random() - 0.5;
+    return -scale * Math.sign(u) * Math.log(1 - 2 * Math.abs(u));
+}
+
+function dpServerId(serverId, epsilon = 0.5, sensitivity = 1) {
+    const numericId = Number(serverId);
+    if (Number.isNaN(numericId)) {
+        console.warn(`dpServerId: serverId is not numeric, storing raw value instead: ${serverId}`);
+        return serverId;
+    }
+    const noise = laplaceNoise(sensitivity / epsilon);
+    return Math.round(numericId + noise);
+}
+
 // =========================
 // HOME
 // =========================
@@ -89,16 +104,51 @@ app.get("/", (req, res) => {
 app.get('/players', async (req, res) => {
     try {
         const [players] = await pool.execute(`
-            SELECT playerId, name, age, email, username, teamName, role, region, swappedRegion AS swappedRegion
+            SELECT playerId, name, age, email, username, serverId, teamName, role, region, swappedRegion AS swappedRegion
             FROM player
             ORDER BY teamName ASC
         `);
 
         console.log('DEBUG: rendering players view, players count=', players.length);
+        try {
+            console.log('DEBUG: players sample:', JSON.stringify(players.slice(0,5), null, 2));
+        } catch (e) {
+            console.log('DEBUG: could not stringify players', e);
+        }
+
+        // Detailed per-player serverId diagnostics
+        if (players.length > 0) {
+            console.log('DEBUG: player object keys:', Object.keys(players[0]));
+            players.forEach(p => {
+                console.log(`DEBUG: playerId=${p.playerId} serverId=${p.serverId} (type=${typeof p.serverId})`);
+            });
+        } else {
+            console.log('DEBUG: no players to inspect');
+        }
         res.render('players', { players });
     } catch (err) {
         console.error('Error loading players:', err);
         res.status(500).send('Error loading players');
+    }
+});
+
+// =========================
+// DEBUG: raw players JSON (temporary)
+// =========================
+
+app.get('/debug/players', async (req, res) => {
+    try {
+        const [players] = await pool.execute(`
+            SELECT playerId, name, age, email, username, serverId, teamName, role, region, swappedRegion AS swappedRegion
+            FROM player
+            ORDER BY teamName ASC
+        `);
+
+        console.log('DEBUG /debug/players count=', players.length);
+        return res.json(players);
+    } catch (err) {
+        console.error('Error /debug/players:', err);
+        res.status(500).json({ error: 'Error loading players' });
     }
 });
 
@@ -162,6 +212,7 @@ app.post("/players/add", async (req, res) => {
         } = req.body;
 
         const regionValue = singaporeRegion || req.body.region || '';
+        const noisedServerId = dpServerId(serverId);
 
         let swappedRegionValue = regionValue;
 
@@ -219,7 +270,7 @@ app.post("/players/add", async (req, res) => {
             email,
             username,
             accountId,
-            serverId,
+            noisedServerId,
             address,
             postalCode,
             regionValue,
