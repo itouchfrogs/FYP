@@ -169,23 +169,157 @@ app.post('/login', async (req, res) => {
         }
 
         const admin = rows[0];
-        const match = await bcrypt.compare(password, admin.password);
+        let match = false;
+
+        try {
+            match = await bcrypt.compare(password, admin.password);
+        } catch (error) {
+            match = false;
+        }
+
+        if (!match && password === admin.password) {
+            match = true;
+        }
 
         if (!match) {
             return res.status(401).send('Invalid username or password');
         }
 
-        if (admin.role !== 'admin') {
+        if (admin.role && admin.role !== 'admin') {
             return res.status(403).send('User does not have admin privileges');
         }
 
         req.session.adminId = admin.adminId;
-        req.session.role = admin.role;
+        req.session.role = admin.role || 'admin';
 
-        res.redirect('/');
+        console.log('DEBUG LOGIN: Session set - adminId=', req.session.adminId, 'role=', req.session.role);
+        res.redirect('/adminpage');
     } catch (err) {
         console.error(err);
         res.status(500).send('Login error');
+    }
+});
+
+app.get('/playerlogin', (req, res) => {
+    res.render('playerlogin');
+});
+
+app.get('/loginlist', (req, res) => {
+    res.render('loginlist');
+});
+
+function requirePlayer(req, res, next) {
+    if (req.session && req.session.playerId) {
+        return next();
+    }
+    return res.redirect('/playerlogin');
+}
+
+app.get('/playerprofile', requirePlayer, async (req, res) => {
+    try {
+        const playerId = req.session.playerId;
+
+        const [rows] = await pool.execute(
+            'SELECT playerId, name, age, email, username, teamName, role, region, postalCode, country FROM player WHERE playerId = ? LIMIT 1',
+            [playerId]
+        );
+
+        if (rows.length === 0) {
+            return res.status(404).send('Player profile not found');
+        }
+
+        res.render('playerprofile', { player: rows[0] });
+    } catch (err) {
+        console.error(err);
+        res.status(500).send('Error loading player profile');
+    }
+});
+
+app.get('/playerprofile/edit', requirePlayer, async (req, res) => {
+    try {
+        const playerId = req.session.playerId;
+
+        const [teams] = await pool.execute(`
+            SELECT DISTINCT teamName
+            FROM team
+            WHERE teamName IS NOT NULL
+            AND teamName != ''
+            ORDER BY teamName ASC
+        `);
+
+        const [rows] = await pool.execute(
+            'SELECT playerId, name, age, email, username, teamName, role, region, postalCode, country FROM player WHERE playerId = ? LIMIT 1',
+            [playerId]
+        );
+
+        if (rows.length === 0) {
+            return res.status(404).send('Player profile not found');
+        }
+
+        res.render('editplayerprofile', { player: rows[0], teams });
+    } catch (err) {
+        console.error(err);
+        res.status(500).send('Error loading player edit page');
+    }
+});
+
+app.post('/playerprofile/edit', requirePlayer, async (req, res) => {
+    try {
+        const playerId = req.session.playerId;
+        const { name, age, email, username, teamName, role, region, postalCode, country } = req.body;
+
+        await pool.execute(
+            `UPDATE player SET name = ?, age = ?, email = ?, username = ?, teamName = ?, role = ?, region = ?, postalCode = ?, country = ? WHERE playerId = ?`,
+            [name, age, email, username, teamName, role, region, postalCode, country, playerId]
+        );
+
+        req.session.playerUsername = username;
+        req.session.playerEmail = email;
+
+        res.redirect('/playerprofile');
+    } catch (err) {
+        console.error(err);
+        res.status(500).send('Error updating player profile');
+    }
+});
+
+app.get('/playerpage', requirePlayer, (req, res) => {
+    res.render('playerpage');
+});
+
+app.get('/adminpage', requireAdmin, (req, res) => {
+    res.render('adminpage');
+});
+
+app.post('/playerlogin', async (req, res) => {
+    try {
+        const { email, password } = req.body;
+
+        const [rows] = await pool.execute(
+            'SELECT playerId, username, email, password FROM player WHERE email = ? LIMIT 1',
+            [email]
+        );
+
+        if (rows.length === 0) {
+            return res.status(401).send('Invalid email or password');
+        }
+
+        const player = rows[0];
+        const match = await bcrypt.compare(password, player.password).catch(() => false);
+        const passwordValid = match || password === player.password;
+
+        if (!passwordValid) {
+            return res.status(401).send('Invalid email or password');
+        }
+
+        req.session.playerId = player.playerId;
+        req.session.playerUsername = player.username;
+        req.session.playerEmail = player.email;
+
+        res.redirect('/playerpage');
+    } catch (err) {
+        console.error(err);
+        res.status(500).send('Player login error');
     }
 });
 
@@ -232,7 +366,9 @@ app.get('/players', async (req, res) => {
         } else {
             console.log('DEBUG: no players to inspect');
         }
-        res.render('players', { players });
+        const isAdmin = (req.session && req.session.role === 'admin') || false;
+        console.log('DEBUG /players: isAdmin=', isAdmin, 'session=', req.session ? req.session.role : 'no session');
+        res.render('players', { players, isAdmin: isAdmin });
     } catch (err) {
         console.error('Error loading players:', err);
         res.status(500).send('Error loading players');
