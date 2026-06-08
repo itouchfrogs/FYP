@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Edit Player Profile</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f3f4f6;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      color: #111827;
+    }
+
+    .edit-card {
+      background: white;
+      border-radius: 16px;
+      padding: 32px;
+      width: min(720px, 96vw);
+      box-shadow: 0 14px 45px rgba(17, 24, 39, 0.12);
+    }
+
+    h1 {
+      margin-top: 0;
+      margin-bottom: 24px;
+      font-size: 2rem;
+    }
+
+    .form-grid {
+      display: grid;
+      gap: 16px;
+      grid-template-columns: repeat(2, minmax(220px, 1fr));
+    }
+
+    label {
+      display: block;
+      font-size: 0.95rem;
+      margin-bottom: 6px;
+      color: #475569;
+    }
+
+    input,
+    select {
+      width: 100%;
+      padding: 12px 14px;
+      border: 1px solid #d1d5db;
+      border-radius: 10px;
+      font-size: 1rem;
+      background: #f8fafc;
+      color: #111827;
+    }
+
+    .full-width {
+      grid-column: 1 / -1;
+    }
+
+    .button-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      justify-content: flex-end;
+      margin-top: 24px;
+    }
+
+    .button-row button,
+    .button-row a {
+      padding: 14px 20px;
+      border-radius: 10px;
+      font-weight: 600;
+      border: none;
+      cursor: pointer;
+      text-decoration: none;
+    }
+
+    .button-row button {
+      background: #2563eb;
+      color: white;
+    }
+
+    .button-row a {
+      background: #e2e8f0;
+      color: #475569;
+    }
+
+    .button-row button:hover {
+      background: #1d4ed8;
+    }
+
+    .button-row a:hover {
+      background: #cbd5e1;
+    }
+  </style>
+</head>
+<body>
+  <div class="edit-card">
+    <h1>Edit Player Information</h1>
+    <form action="/playerprofile/edit" method="POST">
+      <% const teamList = (typeof teams !== 'undefined' && Array.isArray(teams)) ? teams : []; %>
+      <div class="form-grid">
+        <div>
+          <label for="name">Name</label>
+          <input id="name" name="name" type="text" value="<%= player.name %>" required />
+        </div>
+        <div>
+          <label for="username">Username</label>
+          <input id="username" name="username" type="text" value="<%= player.username %>" required />
+        </div>
+        <div>
+          <label for="email">Email</label>
+          <input id="email" name="email" type="email" value="<%= player.email %>" required />
+        </div>
+        <div>
+          <label for="age">Age</label>
+          <input id="age" name="age" type="number" min="0" value="<%= player.age %>" />
+        </div>
+        <div>
+          <label for="teamName">Team</label>
+          <select id="teamName" name="teamName" required>
+            <option value="">Select team</option>
+            <% if (player.teamName && !teamList.some(team => team.teamName === player.teamName)) { %>
+              <option value="<%= player.teamName %>" selected><%= player.teamName %></option>
+            <% } %>
+            <% teamList.forEach(team => { %>
+              <option value="<%= team.teamName %>" <%= player.teamName === team.teamName ? 'selected' : '' %>><%= team.teamName %></option>
+            <% }) %>
+          </select>
+        </div>
+        <div>
+          <label for="role">Role</label>
+          <select id="role" name="role" required>
+            <option value="">Select Role</option>
+            <option value="Jungler" <%= player.role === 'Jungler' ? 'selected' : '' %>>Jungler</option>
+            <option value="Mid Laner" <%= player.role === 'Mid Laner' ? 'selected' : '' %>>Mid Laner</option>
+            <option value="Exp Laner" <%= player.role === 'Exp Laner' ? 'selected' : '' %>>Exp Laner</option>
+            <option value="Gold Laner" <%= player.role === 'Gold Laner' ? 'selected' : '' %>>Gold Laner</option>
+            <option value="Roamer" <%= player.role === 'Roamer' ? 'selected' : '' %>>Roamer</option>
+            <option value="Substitute" <%= player.role === 'Substitute' ? 'selected' : '' %>>Substitute</option>
+            <option value="Coach" <%= player.role === 'Coach' ? 'selected' : '' %>>Coach</option>
+            <option value="Analyst" <%= player.role === 'Analyst' ? 'selected' : '' %>>Analyst</option>
+          </select>
+        </div>
+        <div>
+          <label for="region">Region</label>
+          <select id="region" name="region" required>
+            <option value="">Select Singapore region</option>
+            <option value="Central" <%= player.region === 'Central' ? 'selected' : '' %>>Central</option>
+            <option value="North" <%= player.region === 'North' ? 'selected' : '' %>>North</option>
+            <option value="North-East" <%= player.region === 'North-East' ? 'selected' : '' %>>North-East</option>
+            <option value="East" <%= player.region === 'East' ? 'selected' : '' %>>East</option>
+            <option value="West" <%= player.region === 'West' ? 'selected' : '' %>>West</option>
+          </select>
+        </div>
+        <div>
+          <label for="postalCode">Postal Code</label>
+          <input id="postalCode" name="postalCode" type="text" value="<%= player.postalCode || '' %>" />
+        </div>
+        <div class="full-width">
+          <label for="country">Country</label>
+          <select id="country" name="country" required>
+            <option value="">Select country</option>
+            <option value="Afghanistan" <%= player.country === 'Afghanistan' ? 'selected' : '' %>>Afghanistan</option>
+            <option value="Albania" <%= player.country === 'Albania' ? 'selected' : '' %>>Albania</option>
+            <option value="Algeria" <%= player.country === 'Algeria' ? 'selected' : '' %>>Algeria</option>
+            <option value="Andorra" <%= player.country === 'Andorra' ? 'selected' : '' %>>Andorra</option>
+            <option value="Angola" <%= player.country === 'Angola' ? 'selected' : '' %>>Angola</option>
+            <option value="Antigua and Barbuda" <%= player.country === 'Antigua and Barbuda' ? 'selected' : '' %>>Antigua and Barbuda</option>
+            <option value="Argentina" <%= player.country === 'Argentina' ? 'selected' : '' %>>Argentina</option>
+            <option value="Armenia" <%= player.country === 'Armenia' ? 'selected' : '' %>>Armenia</option>
+            <option value="Australia" <%= player.country === 'Australia' ? 'selected' : '' %>>Australia</option>
+            <option value="Austria" <%= player.country === 'Austria' ? 'selected' : '' %>>Austria</option>
+            <option value="Azerbaijan" <%= player.country === 'Azerbaijan' ? 'selected' : '' %>>Azerbaijan</option>
+            <option value="Bahamas" <%= player.country === 'Bahamas' ? 'selected' : '' %>>Bahamas</option>
+            <option value="Bahrain" <%= player.country === 'Bahrain' ? 'selected' : '' %>>Bahrain</option>
+            <option value="Bangladesh" <%= player.country === 'Bangladesh' ? 'selected' : '' %>>Bangladesh</option>
+            <option value="Barbados" <%= player.country === 'Barbados' ? 'selected' : '' %>>Barbados</option>
+            <option value="Belarus" <%= player.country === 'Belarus' ? 'selected' : '' %>>Belarus</option>
+            <option value="Belgium" <%= player.country === 'Belgium' ? 'selected' : '' %>>Belgium</option>
+            <option value="Belize" <%= player.country === 'Belize' ? 'selected' : '' %>>Belize</option>
+            <option value="Benin" <%= player.country === 'Benin' ? 'selected' : '' %>>Benin</option>
+            <option value="Bhutan" <%= player.country === 'Bhutan' ? 'selected' : '' %>>Bhutan</option>
+            <option value="Bolivia" <%= player.country === 'Bolivia' ? 'selected' : '' %>>Bolivia</option>
+            <option value="Bosnia and Herzegovina" <%= player.country === 'Bosnia and Herzegovina' ? 'selected' : '' %>>Bosnia and Herzegovina</option>
+            <option value="Botswana" <%= player.country === 'Botswana' ? 'selected' : '' %>>Botswana</option>
+            <option value="Brazil" <%= player.country === 'Brazil' ? 'selected' : '' %>>Brazil</option>
+            <option value="Brunei" <%= player.country === 'Brunei' ? 'selected' : '' %>>Brunei</option>
+            <option value="Bulgaria" <%= player.country === 'Bulgaria' ? 'selected' : '' %>>Bulgaria</option>
+            <option value="Burkina Faso" <%= player.country === 'Burkina Faso' ? 'selected' : '' %>>Burkina Faso</option>
+            <option value="Burundi" <%= player.country === 'Burundi' ? 'selected' : '' %>>Burundi</option>
+            <option value="Cabo Verde" <%= player.country === 'Cabo Verde' ? 'selected' : '' %>>Cabo Verde</option>
+            <option value="Cambodia" <%= player.country === 'Cambodia' ? 'selected' : '' %>>Cambodia</option>
+            <option value="Cameroon" <%= player.country === 'Cameroon' ? 'selected' : '' %>>Cameroon</option>
+            <option value="Canada" <%= player.country === 'Canada' ? 'selected' : '' %>>Canada</option>
+            <option value="Central African Republic" <%= player.country === 'Central African Republic' ? 'selected' : '' %>>Central African Republic</option>
+            <option value="Chad" <%= player.country === 'Chad' ? 'selected' : '' %>>Chad</option>
+            <option value="Chile" <%= player.country === 'Chile' ? 'selected' : '' %>>Chile</option>
+            <option value="China" <%= player.country === 'China' ? 'selected' : '' %>>China</option>
+            <option value="Colombia" <%= player.country === 'Colombia' ? 'selected' : '' %>>Colombia</option>
+            <option value="Comoros" <%= player.country === 'Comoros' ? 'selected' : '' %>>Comoros</option>
+            <option value="Congo" <%= player.country === 'Congo' ? 'selected' : '' %>>Congo</option>
+            <option value="Costa Rica" <%= player.country === 'Costa Rica' ? 'selected' : '' %>>Costa Rica</option>
+            <option value="Cote d'Ivoire" <%= player.country === "Cote d'Ivoire" ? 'selected' : '' %>>Cote d'Ivoire</option>
+            <option value="Croatia" <%= player.country === 'Croatia' ? 'selected' : '' %>>Croatia</option>
+            <option value="Cuba" <%= player.country === 'Cuba' ? 'selected' : '' %>>Cuba</option>
+            <option value="Cyprus" <%= player.country === 'Cyprus' ? 'selected' : '' %>>Cyprus</option>
+            <option value="Czech Republic" <%= player.country === 'Czech Republic' ? 'selected' : '' %>>Czech Republic</option>
+            <option value="Democratic Republic of the Congo" <%= player.country === 'Democratic Republic of the Congo' ? 'selected' : '' %>>Democratic Republic of the Congo</option>
+            <option value="Denmark" <%= player.country === 'Denmark' ? 'selected' : '' %>>Denmark</option>
+            <option value="Djibouti" <%= player.country === 'Djibouti' ? 'selected' : '' %>>Djibouti</option>
+            <option value="Dominica" <%= player.country === 'Dominica' ? 'selected' : '' %>>Dominica</option>
+            <option value="Dominican Republic" <%= player.country === 'Dominican Republic' ? 'selected' : '' %>>Dominican Republic</option>
+            <option value="Ecuador" <%= player.country === 'Ecuador' ? 'selected' : '' %>>Ecuador</option>
+            <option value="Egypt" <%= player.country === 'Egypt' ? 'selected' : '' %>>Egypt</option>
+            <option value="El Salvador" <%= player.country === 'El Salvador' ? 'selected' : '' %>>El Salvador</option>
+            <option value="Equatorial Guinea" <%= player.country === 'Equatorial Guinea' ? 'selected' : '' %>>Equatorial Guinea</option>
+            <option value="Eritrea" <%= player.country === 'Eritrea' ? 'selected' : '' %>>Eritrea</option>
+            <option value="Estonia" <%= player.country === 'Estonia' ? 'selected' : '' %>>Estonia</option>
+            <option value="Eswatini" <%= player.country === 'Eswatini' ? 'selected' : '' %>>Eswatini</option>
+            <option value="Ethiopia" <%= player.country === 'Ethiopia' ? 'selected' : '' %>>Ethiopia</option>
+            <option value="Fiji" <%= player.country === 'Fiji' ? 'selected' : '' %>>Fiji</option>
+            <option value="Finland" <%= player.country === 'Finland' ? 'selected' : '' %>>Finland</option>
+            <option value="France" <%= player.country === 'France' ? 'selected' : '' %>>France</option>
+            <option value="Gabon" <%= player.country === 'Gabon' ? 'selected' : '' %>>Gabon</option>
+            <option value="Gambia" <%= player.country === 'Gambia' ? 'selected' : '' %>>Gambia</option>
+            <option value="Georgia" <%= player.country === 'Georgia' ? 'selected' : '' %>>Georgia</option>
+            <option value="Germany" <%= player.country === 'Germany' ? 'selected' : '' %>>Germany</option>
+            <option value="Ghana" <%= player.country === 'Ghana' ? 'selected' : '' %>>Ghana</option>
+            <option value="Greece" <%= player.country === 'Greece' ? 'selected' : '' %>>Greece</option>
+            <option value="Grenada" <%= player.country === 'Grenada' ? 'selected' : '' %>>Grenada</option>
+            <option value="Guatemala" <%= player.country === 'Guatemala' ? 'selected' : '' %>>Guatemala</option>
+            <option value="Guinea" <%= player.country === 'Guinea' ? 'selected' : '' %>>Guinea</option>
+            <option value="Guinea-Bissau" <%= player.country === 'Guinea-Bissau' ? 'selected' : '' %>>Guinea-Bissau</option>
+            <option value="Guyana" <%= player.country === 'Guyana' ? 'selected' : '' %>>Guyana</option>
+            <option value="Haiti" <%= player.country === 'Haiti' ? 'selected' : '' %>>Haiti</option>
+            <option value="Honduras" <%= player.country === 'Honduras' ? 'selected' : '' %>>Honduras</option>
+            <option value="Hungary" <%= player.country === 'Hungary' ? 'selected' : '' %>>Hungary</option>
+            <option value="Iceland" <%= player.country === 'Iceland' ? 'selected' : '' %>>Iceland</option>
+            <option value="India" <%= player.country === 'India' ? 'selected' : '' %>>India</option>
+            <option value="Indonesia" <%= player.country === 'Indonesia' ? 'selected' : '' %>>Indonesia</option>
+            <option value="Iran" <%= player.country === 'Iran' ? 'selected' : '' %>>Iran</option>
+            <option value="Iraq" <%= player.country === 'Iraq' ? 'selected' : '' %>>Iraq</option>
+            <option value="Ireland" <%= player.country === 'Ireland' ? 'selected' : '' %>>Ireland</option>
+            <option value="Italy" <%= player.country === 'Italy' ? 'selected' : '' %>>Italy</option>
+            <option value="Jamaica" <%= player.country === 'Jamaica' ? 'selected' : '' %>>Jamaica</option>
+            <option value="Japan" <%= player.country === 'Japan' ? 'selected' : '' %>>Japan</option>
+            <option value="Jordan" <%= player.country === 'Jordan' ? 'selected' : '' %>>Jordan</option>
+            <option value="Kazakhstan" <%= player.country === 'Kazakhstan' ? 'selected' : '' %>>Kazakhstan</option>
+            <option value="Kenya" <%= player.country === 'Kenya' ? 'selected' : '' %>>Kenya</option>
+            <option value="Kiribati" <%= player.country === 'Kiribati' ? 'selected' : '' %>>Kiribati</option>
+            <option value="Kuwait" <%= player.country === 'Kuwait' ? 'selected' : '' %>>Kuwait</option>
+            <option value="Kyrgyzstan" <%= player.country === 'Kyrgyzstan' ? 'selected' : '' %>>Kyrgyzstan</option>
+            <option value="Laos" <%= player.country === 'Laos' ? 'selected' : '' %>>Laos</option>
+            <option value="Latvia" <%= player.country === 'Latvia' ? 'selected' : '' %>>Latvia</option>
+            <option value="Lebanon" <%= player.country === 'Lebanon' ? 'selected' : '' %>>Lebanon</option>
+            <option value="Lesotho" <%= player.country === 'Lesotho' ? 'selected' : '' %>>Lesotho</option>
+            <option value="Liberia" <%= player.country === 'Liberia' ? 'selected' : '' %>>Liberia</option>
+            <option value="Libya" <%= player.country === 'Libya' ? 'selected' : '' %>>Libya</option>
+            <option value="Liechtenstein" <%= player.country === 'Liechtenstein' ? 'selected' : '' %>>Liechtenstein</option>
+            <option value="Lithuania" <%= player.country === 'Lithuania' ? 'selected' : '' %>>Lithuania</option>
+            <option value="Luxembourg" <%= player.country === 'Luxembourg' ? 'selected' : '' %>>Luxembourg</option>
+            <option value="Madagascar" <%= player.country === 'Madagascar' ? 'selected' : '' %>>Madagascar</option>
+            <option value="Malawi" <%= player.country === 'Malawi' ? 'selected' : '' %>>Malawi</option>
+            <option value="Malaysia" <%= player.country === 'Malaysia' ? 'selected' : '' %>>Malaysia</option>
+            <option value="Maldives" <%= player.country === 'Maldives' ? 'selected' : '' %>>Maldives</option>
+            <option value="Mali" <%= player.country === 'Mali' ? 'selected' : '' %>>Mali</option>
+            <option value="Malta" <%= player.country === 'Malta' ? 'selected' : '' %>>Malta</option>
+            <option value="Marshall Islands" <%= player.country === 'Marshall Islands' ? 'selected' : '' %>>Marshall Islands</option>
+            <option value="Mauritania" <%= player.country === 'Mauritania' ? 'selected' : '' %>>Mauritania</option>
+            <option value="Mauritius" <%= player.country === 'Mauritius' ? 'selected' : '' %>>Mauritius</option>
+            <option value="Mexico" <%= player.country === 'Mexico' ? 'selected' : '' %>>Mexico</option>
+            <option value="Micronesia" <%= player.country === 'Micronesia' ? 'selected' : '' %>>Micronesia</option>
+            <option value="Moldova" <%= player.country === 'Moldova' ? 'selected' : '' %>>Moldova</option>
+            <option value="Monaco" <%= player.country === 'Monaco' ? 'selected' : '' %>>Monaco</option>
+            <option value="Mongolia" <%= player.country === 'Mongolia' ? 'selected' : '' %>>Mongolia</option>
+            <option value="Montenegro" <%= player.country === 'Montenegro' ? 'selected' : '' %>>Montenegro</option>
+            <option value="Morocco" <%= player.country === 'Morocco' ? 'selected' : '' %>>Morocco</option>
+            <option value="Mozambique" <%= player.country === 'Mozambique' ? 'selected' : '' %>>Mozambique</option>
+            <option value="Myanmar" <%= player.country === 'Myanmar' ? 'selected' : '' %>>Myanmar</option>
+            <option value="Namibia" <%= player.country === 'Namibia' ? 'selected' : '' %>>Namibia</option>
+            <option value="Nauru" <%= player.country === 'Nauru' ? 'selected' : '' %>>Nauru</option>
+            <option value="Nepal" <%= player.country === 'Nepal' ? 'selected' : '' %>>Nepal</option>
+            <option value="Netherlands" <%= player.country === 'Netherlands' ? 'selected' : '' %>>Netherlands</option>
+            <option value="New Zealand" <%= player.country === 'New Zealand' ? 'selected' : '' %>>New Zealand</option>
+            <option value="Nicaragua" <%= player.country === 'Nicaragua' ? 'selected' : '' %>>Nicaragua</option>
+            <option value="Niger" <%= player.country === 'Niger' ? 'selected' : '' %>>Niger</option>
+            <option value="Nigeria" <%= player.country === 'Nigeria' ? 'selected' : '' %>>Nigeria</option>
+            <option value="North Korea" <%= player.country === 'North Korea' ? 'selected' : '' %>>North Korea</option>
+            <option value="North Macedonia" <%= player.country === 'North Macedonia' ? 'selected' : '' %>>North Macedonia</option>
+            <option value="Norway" <%= player.country === 'Norway' ? 'selected' : '' %>>Norway</option>
+            <option value="Oman" <%= player.country === 'Oman' ? 'selected' : '' %>>Oman</option>
+            <option value="Pakistan" <%= player.country === 'Pakistan' ? 'selected' : '' %>>Pakistan</option>
+            <option value="Palau" <%= player.country === 'Palau' ? 'selected' : '' %>>Palau</option>
+            <option value="Panama" <%= player.country === 'Panama' ? 'selected' : '' %>>Panama</option>
+            <option value="Papua New Guinea" <%= player.country === 'Papua New Guinea' ? 'selected' : '' %>>Papua New Guinea</option>
+            <option value="Paraguay" <%= player.country === 'Paraguay' ? 'selected' : '' %>>Paraguay</option>
+            <option value="Peru" <%= player.country === 'Peru' ? 'selected' : '' %>>Peru</option>
+            <option value="Philippines" <%= player.country === 'Philippines' ? 'selected' : '' %>>Philippines</option>
+            <option value="Poland" <%= player.country === 'Poland' ? 'selected' : '' %>>Poland</option>
+            <option value="Portugal" <%= player.country === 'Portugal' ? 'selected' : '' %>>Portugal</option>
+            <option value="Qatar" <%= player.country === 'Qatar' ? 'selected' : '' %>>Qatar</option>
+            <option value="Romania" <%= player.country === 'Romania' ? 'selected' : '' %>>Romania</option>
+            <option value="Russia" <%= player.country === 'Russia' ? 'selected' : '' %>>Russia</option>
+            <option value="Rwanda" <%= player.country === 'Rwanda' ? 'selected' : '' %>>Rwanda</option>
+            <option value="Saint Kitts and Nevis" <%= player.country === 'Saint Kitts and Nevis' ? 'selected' : '' %>>Saint Kitts and Nevis</option>
+            <option value="Saint Lucia" <%= player.country === 'Saint Lucia' ? 'selected' : '' %>>Saint Lucia</option>
+            <option value="Saint Vincent and the Grenadines" <%= player.country === 'Saint Vincent and the Grenadines' ? 'selected' : '' %>>Saint Vincent and the Grenadines</option>
+            <option value="Samoa" <%= player.country === 'Samoa' ? 'selected' : '' %>>Samoa</option>
+            <option value="San Marino" <%= player.country === 'San Marino' ? 'selected' : '' %>>San Marino</option>
+            <option value="Sao Tome and Principe" <%= player.country === 'Sao Tome and Principe' ? 'selected' : '' %>>Sao Tome and Principe</option>
+            <option value="Saudi Arabia" <%= player.country === 'Saudi Arabia' ? 'selected' : '' %>>Saudi Arabia</option>
+            <option value="Senegal" <%= player.country === 'Senegal' ? 'selected' : '' %>>Senegal</option>
+            <option value="Serbia" <%= player.country === 'Serbia' ? 'selected' : '' %>>Serbia</option>
+            <option value="Seychelles" <%= player.country === 'Seychelles' ? 'selected' : '' %>>Seychelles</option>
+            <option value="Shpidibaum" <%= player.country === 'Shpidibaum' ? 'selected' : '' %>>Shpidibaum</option>
+            <option value="Sierra Leone" <%= player.country === 'Sierra Leone' ? 'selected' : '' %>>Sierra Leone</option>
+            <option value="Singapore" <%= player.country === 'Singapore' ? 'selected' : '' %>>Singapore</option>
+            <option value="Slovakia" <%= player.country === 'Slovakia' ? 'selected' : '' %>>Slovakia</option>
+            <option value="Slovenia" <%= player.country === 'Slovenia' ? 'selected' : '' %>>Slovenia</option>
+            <option value="Solomon Islands" <%= player.country === 'Solomon Islands' ? 'selected' : '' %>>Solomon Islands</option>
+            <option value="Somalia" <%= player.country === 'Somalia' ? 'selected' : '' %>>Somalia</option>
+            <option value="South Africa" <%= player.country === 'South Africa' ? 'selected' : '' %>>South Africa</option>
+            <option value="South Korea" <%= player.country === 'South Korea' ? 'selected' : '' %>>South Korea</option>
+            <option value="South Sudan" <%= player.country === 'South Sudan' ? 'selected' : '' %>>South Sudan</option>
+            <option value="Spain" <%= player.country === 'Spain' ? 'selected' : '' %>>Spain</option>
+            <option value="Sri Lanka" <%= player.country === 'Sri Lanka' ? 'selected' : '' %>>Sri Lanka</option>
+            <option value="Sudan" <%= player.country === 'Sudan' ? 'selected' : '' %>>Sudan</option>
+            <option value="Suriname" <%= player.country === 'Suriname' ? 'selected' : '' %>>Suriname</option>
+            <option value="Sweden" <%= player.country === 'Sweden' ? 'selected' : '' %>>Sweden</option>
+            <option value="Switzerland" <%= player.country === 'Switzerland' ? 'selected' : '' %>>Switzerland</option>
+            <option value="Syria" <%= player.country === 'Syria' ? 'selected' : '' %>>Syria</option>
+            <option value="Tajikistan" <%= player.country === 'Tajikistan' ? 'selected' : '' %>>Tajikistan</option>
+            <option value="Tanzania" <%= player.country === 'Tanzania' ? 'selected' : '' %>>Tanzania</option>
+            <option value="Thailand" <%= player.country === 'Thailand' ? 'selected' : '' %>>Thailand</option>
+            <option value="Timor-Leste" <%= player.country === 'Timor-Leste' ? 'selected' : '' %>>Timor-Leste</option>
+            <option value="Togo" <%= player.country === 'Togo' ? 'selected' : '' %>>Togo</option>
+            <option value="Tonga" <%= player.country === 'Tonga' ? 'selected' : '' %>>Tonga</option>
+            <option value="Trinidad and Tobago" <%= player.country === 'Trinidad and Tobago' ? 'selected' : '' %>>Trinidad and Tobago</option>
+            <option value="Tunisia" <%= player.country === 'Tunisia' ? 'selected' : '' %>>Tunisia</option>
+            <option value="Turkey" <%= player.country === 'Turkey' ? 'selected' : '' %>>Turkey</option>
+            <option value="Turkmenistan" <%= player.country === 'Turkmenistan' ? 'selected' : '' %>>Turkmenistan</option>
+            <option value="Tuvalu" <%= player.country === 'Tuvalu' ? 'selected' : '' %>>Tuvalu</option>
+            <option value="Uganda" <%= player.country === 'Uganda' ? 'selected' : '' %>>Uganda</option>
+            <option value="Ukraine" <%= player.country === 'Ukraine' ? 'selected' : '' %>>Ukraine</option>
+            <option value="United Arab Emirates" <%= player.country === 'United Arab Emirates' ? 'selected' : '' %>>United Arab Emirates</option>
+            <option value="United Kingdom" <%= player.country === 'United Kingdom' ? 'selected' : '' %>>United Kingdom</option>
+            <option value="United States" <%= player.country === 'United States' ? 'selected' : '' %>>United States</option>
+            <option value="Uruguay" <%= player.country === 'Uruguay' ? 'selected' : '' %>>Uruguay</option>
+            <option value="Uzbekistan" <%= player.country === 'Uzbekistan' ? 'selected' : '' %>>Uzbekistan</option>
+            <option value="Vanuatu" <%= player.country === 'Vanuatu' ? 'selected' : '' %>>Vanuatu</option>
+            <option value="Venezuela" <%= player.country === 'Venezuela' ? 'selected' : '' %>>Venezuela</option>
+            <option value="Vietnam" <%= player.country === 'Vietnam' ? 'selected' : '' %>>Vietnam</option>
+            <option value="Yemen" <%= player.country === 'Yemen' ? 'selected' : '' %>>Yemen</option>
+            <option value="Zambia" <%= player.country === 'Zambia' ? 'selected' : '' %>>Zambia</option>
+            <option value="Zimbabwe" <%= player.country === 'Zimbabwe' ? 'selected' : '' %>>Zimbabwe</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="button-row">
+        <a href="/playerprofile">Cancel</a>
+        <button type="submit">Save Changes</button>
+      </div>
+    </form>
+  </div>
+</body>
+</html>

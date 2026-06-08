@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Admin Dashboard</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f3f4f6;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      color: #111827;
+    }
+
+    .dashboard-card {
+      background: white;
+      border-radius: 16px;
+      padding: 40px;
+      width: min(520px, 96vw);
+      box-shadow: 0 14px 45px rgba(17, 24, 39, 0.12);
+      text-align: center;
+    }
+
+    .dashboard-card h1 {
+      margin-top: 0;
+      margin-bottom: 12px;
+      font-size: 2rem;
+    }
+
+    .dashboard-card .subtitle {
+      color: #6b7280;
+      margin-bottom: 32px;
+      font-size: 1rem;
+    }
+
+    .button-group {
+      display: grid;
+      gap: 14px;
+      margin-bottom: 28px;
+    }
+
+    .button-group a {
+      display: block;
+      padding: 16px 20px;
+      text-decoration: none;
+      border-radius: 12px;
+      background: #2563eb;
+      color: white;
+      font-weight: 600;
+      font-size: 1.05rem;
+      transition: background 0.2s ease;
+    }
+
+    .button-group a:hover {
+      background: #1d4ed8;
+    }
+
+    .button-group a.logout {
+      background: #ef4444;
+    }
+
+    .button-group a.logout:hover {
+      background: #dc2626;
+    }
+  </style>
+</head>
+<body>
+  <div class="dashboard-card">
+    <h1>Admin Dashboard</h1>
+    <p class="subtitle">Use the buttons below to manage teams or sign out.</p>
+    <div class="button-group">
+      <a href="/">Home</a>
+      <a href="/players">View Players</a>
+      <a href="/players/add">Add Player</a>
+      <a href="/teams">View Teams</a>
+      <a href="/teams/add">Add Team</a>
+      <a href="/logout" class="logout">Logout</a>
+    </div>
+  </div>
+</body>
+</html>

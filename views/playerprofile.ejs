@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Player Profile</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f3f4f6;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      color: #111827;
+    }
+
+    .profile-card {
+      background: white;
+      border-radius: 16px;
+      padding: 32px;
+      width: min(720px, 96vw);
+      box-shadow: 0 14px 45px rgba(17, 24, 39, 0.12);
+    }
+
+    .profile-card h1 {
+      margin-top: 0;
+      margin-bottom: 24px;
+      font-size: 2rem;
+    }
+
+    .profile-grid {
+      display: grid;
+      gap: 16px;
+      grid-template-columns: repeat(2, minmax(200px, 1fr));
+    }
+
+    .profile-item {
+      background: #f8fafc;
+      border-radius: 12px;
+      padding: 18px;
+      border: 1px solid #e2e8f0;
+    }
+
+    .profile-item h2 {
+      margin: 0 0 10px;
+      font-size: 0.95rem;
+      color: #475569;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .profile-item p {
+      margin: 0;
+      font-size: 1rem;
+      color: #111827;
+    }
+
+    .profile-actions {
+      margin-top: 28px;
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .profile-actions a {
+      text-decoration: none;
+      background: #2563eb;
+      color: white;
+      padding: 12px 18px;
+      border-radius: 10px;
+      font-weight: 600;
+      transition: background 0.2s ease;
+    }
+
+    .profile-actions a:hover {
+      background: #1d4ed8;
+    }
+  </style>
+</head>
+<body>
+  <div class="profile-card">
+    <h1>Your Player Profile</h1>
+    <div class="profile-grid">
+      <div class="profile-item">
+        <h2>Name</h2>
+        <p><%= player.name %></p>
+      </div>
+      <div class="profile-item">
+        <h2>Username</h2>
+        <p><%= player.username %></p>
+      </div>
+      <div class="profile-item">
+        <h2>Email</h2>
+        <p><%= player.email %></p>
+      </div>
+      <div class="profile-item">
+        <h2>Age</h2>
+        <p><%= player.age %></p>
+      </div>
+      <div class="profile-item">
+        <h2>Team</h2>
+        <p><%= player.teamName || 'N/A' %></p>
+      </div>
+      <div class="profile-item">
+        <h2>Role</h2>
+        <p><%= player.role || 'N/A' %></p>
+      </div>
+      <div class="profile-item">
+        <h2>Region</h2>
+        <p><%= player.region || 'N/A' %></p>
+      </div>
+      <div class="profile-item">
+        <h2>Postal Code</h2>
+        <p><%= player.postalCode || 'N/A' %></p>
+      </div>
+      <div class="profile-item">
+        <h2>Country</h2>
+        <p><%= player.country || 'N/A' %></p>
+      </div>
+    </div>
+    <div class="profile-actions">
+      <a href="/playerprofile/edit">Edit My Info</a>
+      <a href="/players">View All Players</a>
+      <a href="/">Home</a>
+      <a href="/logout">Logout</a>
+    </div>
+  </div>
+</body>
+</html>
