@@ -2,6 +2,8 @@ const path = require('path');
 const express = require('express');
 const mysql = require('mysql2');
 const multer = require('multer');
+const session = require('express-session');
+const bcrypt = require('bcrypt');
 
 const app = express();
 
@@ -112,6 +114,21 @@ async function saveAddressToVault(realAddress) {
     }
 }
 
+// Session middleware
+app.use(session({
+    secret: 'secret',
+    resave: false,
+    saveUninitialized: true,
+    cookie: { maxAge: 1000 * 60 * 60 * 24 * 7 } // 1 week
+}));
+
+function requireAdmin(req, res, next) {
+    if (req.session && req.session.role === 'admin') {
+        return next();
+    }
+    return res.redirect('/login');
+}
+
 // =========================
 // HOME
 // =========================
@@ -128,6 +145,63 @@ app.get("/", (req, res) => {
 
     res.render("home");
 
+});
+
+// =========================
+// LOGIN PAGE
+// =========================
+
+app.get('/login', (req, res) => {
+    res.render('login');
+});
+
+app.post('/login', async (req, res) => {
+    try {
+        const { username, password } = req.body;
+
+        const [rows] = await pool.execute(
+            'SELECT adminId, username, password, role FROM admin WHERE username = ? LIMIT 1',
+            [username]
+        );
+
+        if (rows.length === 0) {
+            return res.status(401).send('Invalid username or password');
+        }
+
+        const admin = rows[0];
+        const match = await bcrypt.compare(password, admin.password);
+
+        if (!match) {
+            return res.status(401).send('Invalid username or password');
+        }
+
+        if (admin.role !== 'admin') {
+            return res.status(403).send('User does not have admin privileges');
+        }
+
+        req.session.adminId = admin.adminId;
+        req.session.role = admin.role;
+
+        res.redirect('/');
+    } catch (err) {
+        console.error(err);
+        res.status(500).send('Login error');
+    }
+});
+
+// GET /logout
+app.get('/logout', (req, res) => {
+    if (req.session) {
+        req.session.destroy((err) => {
+            if (err) {
+                console.error(err);
+                return res.status(500).send('Logout error');
+            }
+            res.redirect('/');
+        });
+    } else {
+        res.redirect('/');
+    }
 });
 
 // =========================
@@ -189,7 +263,7 @@ app.get('/debug/players', async (req, res) => {
 // ADD PLAYER PAGE
 // =========================
 
-app.get("/players/add", async (req, res) => {
+app.get("/players/add", requireAdmin, async (req, res) => {
     try {
 
         const [teams] = await pool.execute(`
@@ -216,7 +290,7 @@ app.get("/players/add", async (req, res) => {
 // ADD PLAYER
 // =========================
 
-app.post("/players/add", async (req, res) => {
+app.post("/players/add", requireAdmin, async (req, res) => {
 
     try {
 
@@ -370,6 +444,75 @@ app.post('/players/delete/:playerId', async (req, res) => {
         res.status(500).send('Error deleting player');
     } finally {
         connection.release();
+    }
+});
+
+// =========================
+// DELETE TEAM
+// =========================
+
+app.post('/teams/delete/:teamId', requireAdmin, async (req, res) => {
+    try {
+        const { teamId } = req.params;
+
+        await pool.execute(
+            `DELETE FROM team WHERE teamId = ?`,
+            [teamId]
+        );
+
+        res.redirect('/teams');
+    } catch (err) {
+        console.error(err);
+        res.status(500).send("Error deleting team");
+    }
+});
+
+// =========================
+// ADD TEAM PAGE
+// =========================
+
+app.get("/teams/add", requireAdmin, async (req, res) => {
+    try {
+        res.render("addteam");
+    } catch (err) {
+        console.error(err);
+        res.status(500).send("Error loading add team page");
+    }
+});
+
+app.post("/teams/add", requireAdmin, async (req, res) => {
+    try {
+        const { teamName } = req.body;
+
+        await pool.execute(
+            `INSERT INTO team (teamName) VALUES (?)`,
+            [teamName]
+        );
+
+        res.redirect("/teams");
+    } catch (err) {
+        console.error(err);
+        res.status(500).send("Error adding team");
+    }
+});
+
+// =========================
+// SHOW ALL TEAMS
+// =========================
+
+app.get('/teams', requireAdmin, async (req, res) => {
+    try {
+        const [teams] = await pool.execute(`
+            SELECT teamName
+            FROM team
+            ORDER BY teamId ASC
+        `);
+
+        console.log('DEBUG: rendering teams view, teams count=', teams.length);
+        res.render('teams', { teams });
+    } catch (err) {
+        console.error('Error loading teams:', err);
+        res.status(500).send('Error loading teams');
     }
 });
 
