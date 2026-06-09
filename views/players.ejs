@@ -197,11 +197,38 @@
       <% if (players.length === 0) { %>
         <p class="no-players">No players found.</p>
       <% } else { %>
+        <%
+          // Age generalization function
+          function generalizeAge(age) {
+            const numAge = Number(age);
+
+            if (numAge < 18) {
+              return '18';
+            }
+            else if (numAge >= 18 && numAge <= 25) {
+              return '18-25';
+            }
+            else if (numAge >= 26 && numAge <= 35) {
+              return '26-35';
+            }
+            else if (numAge >= 36 && numAge <= 45) {
+              return '36-45';
+            }
+            else if (numAge >= 46 && numAge <= 55) {
+              return '46-55';
+            }
+            else if (numAge >= 56) {
+              return '56+';
+            }
+
+            return 'Unknown';
+          }
+        %>
         <% players.forEach(player => { %>
           <div class="player-card">
             <h3><%= player.name %></h3>
-            <p><strong>Age:</strong> <%= player.age %></p>
-            <p><strong>Age:</strong> <%= player.ageRange %></p>
+            <p><strong>Age:</strong> <%= generalizeAge(player.age) %></p>
+            <p>
               <strong>Email:</strong>
               <%
                 const email = player.email || '';
