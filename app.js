@@ -472,9 +472,9 @@ app.post("/players/add", requireAdmin, async (req, res) => {
 
             name,
             age,
-            ic,
-            phoneNumber,
-            email,
+            encryptedIC,
+            encryptedPhone,
+            encryptedEmail,
             username,
             accountId,
             serverId,
@@ -492,6 +492,9 @@ app.post("/players/add", requireAdmin, async (req, res) => {
         const noisedServerId = dpServerId(serverId);
         const addressToken = await saveAddressToVault(address);
         const generalizedAge = generalizeAge(age);
+        const encryptedIC = encrypt(ic);
+        const encryptedPhone = encrypt(phoneNumber);
+        const encryptedEmail = encrypt(email);
 
     function encrypt(text) {
         const iv = crypto.randomBytes(IV_LENGTH);
