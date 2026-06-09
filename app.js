@@ -421,6 +421,12 @@ app.get('/debug/players', async (req, res) => {
             ORDER BY teamName ASC
         `);
 
+        players.forEach(player => {
+            player.ic = decrypt(player.ic);
+            player.phoneNumber = decrypt(player.phoneNumber);
+            player.email = decrypt(player.email);
+        });
+
         console.log('DEBUG /debug/players count=', players.length);
         return res.json(players);
     } catch (err) {
