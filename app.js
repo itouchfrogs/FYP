@@ -81,6 +81,31 @@ function dpServerId(serverId, epsilon = 0.5, sensitivity = 1) {
     return Math.round(numericId + noise);
 }
 
+function generalizeAge(age) {
+    const numAge = Number(age);
+
+    if (numAge < 18) {
+        return '18';
+    }
+    else if (numAge >= 18 && numAge <= 25) {
+        return '18-25';
+    }
+    else if (numAge >= 26 && numAge <= 35) {
+        return '26-35';
+    }
+    else if (numAge >= 36 && numAge <= 45) {
+        return '36-45';
+    }
+    else if (numAge >= 46 && numAge <= 55) {
+        return '46-55';
+    }
+    else if (numAge >= 56) {
+        return '56+';
+    }
+
+    return 'Unknown';
+}
+
 const crypto = require('crypto');
 
 function generateAddressToken(length = 16) {
@@ -220,7 +245,7 @@ app.get('/playerprofile', requirePlayer, async (req, res) => {
         const playerId = req.session.playerId;
 
         const [rows] = await pool.execute(
-            'SELECT playerId, name, age, email, username, teamName, role, region, postalCode, country FROM player WHERE playerId = ? LIMIT 1',
+            'SELECT playerId, name, age, ageRange, email, username, teamName, role, region, postalCode, country FROM player WHERE playerId = ? LIMIT 1',
             [playerId]
         );
 
@@ -248,7 +273,7 @@ app.get('/playerprofile/edit', requirePlayer, async (req, res) => {
         `);
 
         const [rows] = await pool.execute(
-            'SELECT playerId, name, age, email, username, teamName, role, region, postalCode, country FROM player WHERE playerId = ? LIMIT 1',
+            'SELECT playerId, name, age, ageRange, email, username, teamName, role, region, postalCode, country FROM player WHERE playerId = ? LIMIT 1',
             [playerId]
         );
 
@@ -266,7 +291,7 @@ app.get('/playerprofile/edit', requirePlayer, async (req, res) => {
 app.post('/playerprofile/edit', requirePlayer, async (req, res) => {
     try {
         const playerId = req.session.playerId;
-        const { name, age, email, username, teamName, role, region, postalCode, country } = req.body;
+        const { name, age, ageRange, email, username, teamName, role, region, postalCode, country } = req.body;
 
         await pool.execute(
             `UPDATE player SET name = ?, age = ?, email = ?, username = ?, teamName = ?, role = ?, region = ?, postalCode = ?, country = ? WHERE playerId = ?`,
@@ -345,7 +370,7 @@ app.get('/logout', (req, res) => {
 app.get('/players', async (req, res) => {
     try {
         const [players] = await pool.execute(`
-            SELECT playerId, name, age, email, username, serverId, teamName, role, region, swappedRegion AS swappedRegion
+            SELECT playerId, name, age, ageRange, email, username, serverId, teamName, role, region, swappedRegion AS swappedRegion
             FROM player
             ORDER BY teamName ASC
         `);
@@ -382,7 +407,7 @@ app.get('/players', async (req, res) => {
 app.get('/debug/players', async (req, res) => {
     try {
         const [players] = await pool.execute(`
-            SELECT playerId, name, age, email, username, serverId, teamName, role, region, swappedRegion AS swappedRegion
+            SELECT playerId, name, age, ageRange, email, username, serverId, teamName, role, region, swappedRegion AS swappedRegion
             FROM player
             ORDER BY teamName ASC
         `);
@@ -457,6 +482,7 @@ app.post("/players/add", requireAdmin, async (req, res) => {
         const regionValue = singaporeRegion || req.body.region || '';
         const noisedServerId = dpServerId(serverId);
         const addressToken = await saveAddressToVault(address);
+        const generalizedAge = generalizeAge(age);
 
         let swappedRegionValue = regionValue;
 
@@ -486,6 +512,7 @@ app.post("/players/add", requireAdmin, async (req, res) => {
 
                 name,
                 age,
+                ageRange,
                 ic,
                 phoneNumber,
                 email,
@@ -509,6 +536,7 @@ app.post("/players/add", requireAdmin, async (req, res) => {
 
             name,
             age,
+            generalizedAge,
             ic,
             phoneNumber,
             email,
