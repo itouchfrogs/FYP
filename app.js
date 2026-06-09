@@ -81,40 +81,6 @@ function dpServerId(serverId, epsilon = 0.5, sensitivity = 1) {
     return Math.round(numericId + noise);
 }
 
-function generalizeAge(age) {
-    const numAge = Number(age);
-
-    if (numAge < 18) {
-        return '18';
-    }
-    else if (numAge >= 18 && numAge <= 25) {
-        return '18-25';
-    }
-    else if (numAge >= 26 && numAge <= 35) {
-        return '26-35';
-    }
-    else if (numAge >= 36 && numAge <= 45) {
-        return '36-45';
-    }
-    else if (numAge >= 46 && numAge <= 55) {
-        return '46-55';
-    }
-    else if (numAge >= 56) {
-        return '56+';
-    }
-
-    return 'Unknown';
-}
-
-const crypto = require('crypto');
-
-const ENCRYPTION_KEY = crypto
-    .createHash('sha256')
-    .update('dot dot dot') // change this to your own secret
-    .digest();
-
-const IV_LENGTH = 16;
-
 const crypto = require('crypto');
 
 function generateAddressToken(length = 16) {
@@ -254,7 +220,7 @@ app.get('/playerprofile', requirePlayer, async (req, res) => {
         const playerId = req.session.playerId;
 
         const [rows] = await pool.execute(
-            'SELECT playerId, name, age, ageRange, email, username, teamName, role, region, postalCode, country FROM player WHERE playerId = ? LIMIT 1',
+            'SELECT playerId, name, age, email, username, teamName, role, region, postalCode, country FROM player WHERE playerId = ? LIMIT 1',
             [playerId]
         );
 
@@ -282,7 +248,7 @@ app.get('/playerprofile/edit', requirePlayer, async (req, res) => {
         `);
 
         const [rows] = await pool.execute(
-            'SELECT playerId, name, age, ageRange, email, username, teamName, role, region, postalCode, country FROM player WHERE playerId = ? LIMIT 1',
+            'SELECT playerId, name, age, email, username, teamName, role, region, postalCode, country FROM player WHERE playerId = ? LIMIT 1',
             [playerId]
         );
 
@@ -300,7 +266,7 @@ app.get('/playerprofile/edit', requirePlayer, async (req, res) => {
 app.post('/playerprofile/edit', requirePlayer, async (req, res) => {
     try {
         const playerId = req.session.playerId;
-        const { name, age, ageRange, email, username, teamName, role, region, postalCode, country } = req.body;
+        const { name, age, email, username, teamName, role, region, postalCode, country } = req.body;
 
         await pool.execute(
             `UPDATE player SET name = ?, age = ?, email = ?, username = ?, teamName = ?, role = ?, region = ?, postalCode = ?, country = ? WHERE playerId = ?`,
@@ -379,7 +345,7 @@ app.get('/logout', (req, res) => {
 app.get('/players', async (req, res) => {
     try {
         const [players] = await pool.execute(`
-            SELECT playerId, name, age, ageRange, email, username, serverId, teamName, role, region, swappedRegion AS swappedRegion
+            SELECT playerId, name, age, email, username, serverId, teamName, role, region, swappedRegion AS swappedRegion
             FROM player
             ORDER BY teamName ASC
         `);
@@ -416,16 +382,10 @@ app.get('/players', async (req, res) => {
 app.get('/debug/players', async (req, res) => {
     try {
         const [players] = await pool.execute(`
-            SELECT playerId, name, age, ageRange, email, username, serverId, teamName, role, region, swappedRegion AS swappedRegion
+            SELECT playerId, name, age, email, username, serverId, teamName, role, region, swappedRegion AS swappedRegion
             FROM player
             ORDER BY teamName ASC
         `);
-
-        players.forEach(player => {
-            player.ic = decrypt(player.ic);
-            player.phoneNumber = decrypt(player.phoneNumber);
-            player.email = decrypt(player.email);
-        });
 
         console.log('DEBUG /debug/players count=', players.length);
         return res.json(players);
@@ -478,9 +438,9 @@ app.post("/players/add", requireAdmin, async (req, res) => {
 
             name,
             age,
-            encryptedIC,
-            encryptedPhone,
-            encryptedEmail,
+            ic,
+            phoneNumber,
+            email,
             username,
             accountId,
             serverId,
@@ -497,45 +457,6 @@ app.post("/players/add", requireAdmin, async (req, res) => {
         const regionValue = singaporeRegion || req.body.region || '';
         const noisedServerId = dpServerId(serverId);
         const addressToken = await saveAddressToVault(address);
-        const generalizedAge = generalizeAge(age);
-        const encryptedIC = encrypt(ic);
-        const encryptedPhone = encrypt(phoneNumber);
-        const encryptedEmail = encrypt(email);
-
-    function encrypt(text) {
-        const iv = crypto.randomBytes(IV_LENGTH);
-
-        const cipher = crypto.createCipheriv(
-            'aes-256-cbc',
-            ENCRYPTION_KEY,
-            iv
-        );
-
-        let encrypted = cipher.update(text.toString(), 'utf8', 'hex');
-        encrypted += cipher.final('hex');
-    
-            return iv.toString('hex') + ':' + encrypted;
-        }
-
-    function decrypt(encryptedText) {
-        const parts = encryptedText.split(':');
-
-        const iv = Buffer.from(parts.shift(), 'hex');
-        const encrypted = parts.join(':');
-
-        const decipher = crypto.createDecipheriv(
-            'aes-256-cbc',
-            ENCRYPTION_KEY,
-            iv
-        );
-
-        let decrypted = decipher.update(encrypted, 'hex', 'utf8');
-        decrypted += decipher.final('utf8');
-
-            return decrypted;
-        }
-    
-        
 
         let swappedRegionValue = regionValue;
 
@@ -565,7 +486,6 @@ app.post("/players/add", requireAdmin, async (req, res) => {
 
                 name,
                 age,
-                ageRange,
                 ic,
                 phoneNumber,
                 email,
@@ -589,7 +509,6 @@ app.post("/players/add", requireAdmin, async (req, res) => {
 
             name,
             age,
-            generalizedAge,
             ic,
             phoneNumber,
             email,
@@ -783,6 +702,111 @@ app.post("/address-vault/retrieve", requireAdmin, async (req, res) => {
     } catch (err) {
         console.error(err);
         res.status(500).send("Error retrieving address");
+    }
+});
+
+// =========================
+// ADD ADMIN ACCOUNT PAGE
+// =========================
+
+
+app.get("/admins/add", requireAdmin, (req, res) => {
+    try {
+        res.render("addadmin");
+    } catch (err) {
+        console.error(err);
+        res.status(500).send("Error loading add admin account page");
+    }
+});
+
+// =========================
+// ADD ADMIN ACCOUNT
+// =========================
+
+app.post("/admins/add", requireAdmin, async (req, res) => {
+    try {
+        const { username, password, role } = req.body;
+
+        // Validate inputs
+        if (!username || !password || !role) {
+            return res.status(400).send("Username, password, and role are required");
+        }
+
+        // Validate role
+        if (role !== 'admin' && role !== 'player') {
+            return res.status(400).send("Role must be 'admin' or 'player'");
+        }
+
+        // Check if username already exists
+        const [existing] = await pool.execute(
+            'SELECT adminId FROM admin WHERE username = ?',
+            [username]
+        );
+
+        if (existing.length > 0) {
+            return res.status(400).send("Username already exists");
+        }
+
+        const hashedPassword = await bcrypt.hash(password, 10);
+
+        // Insert new admin account
+        await pool.execute(
+            'INSERT INTO admin (username, password, role) VALUES (?, ?, ?)',
+            [username, hashedPassword, role]
+        );
+
+        res.redirect("/admins");
+    } catch (err) {
+        console.error(err);
+        res.status(500).send("Error adding admin account");
+    }
+});
+
+// =================--------
+// SHOW ALL ADMINS
+// =========================
+
+
+app.get('/admins', requireAdmin, async (req, res) => {
+    try {
+        const [admins] = await pool.execute(`
+            SELECT adminId, username, role
+            FROM admin
+            ORDER BY adminId ASC
+        `);
+
+        console.log('DEBUG: rendering admins view, admins count=', admins.length);
+        res.render('admins', { admins });
+    } catch (err) {
+        console.error('Error loading admins:', err);
+        res.status(500).send('Error loading admins');
+    }
+});
+
+
+// =========================
+// DELETE ADMIN ACCOUNT
+// =========================
+
+
+app.post('/admins/delete/:adminId', requireAdmin, async (req, res) => {
+    try {
+        const { adminId } = req.params;
+
+        // Prevent deleting yourself
+        if (parseInt(adminId) === req.session.adminId) {
+            return res.status(400).send("You cannot delete your own account");
+        }
+
+        await pool.execute(
+            `DELETE FROM admin WHERE adminId = ?`,
+            [adminId]
+        );
+
+        res.redirect('/admins');
+    } catch (err) {
+        console.error(err);
+        res.status(500).send("Error deleting admin account");
     }
 });
 
