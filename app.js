@@ -653,6 +653,59 @@ app.get('/teams', requireAdmin, async (req, res) => {
 });
 
 // =========================
+// ADDRESS VAULT PAGE
+// =========================
+
+app.get("/address-vault", requireAdmin, async (req, res) => {
+    try {
+        res.render("address-vault", { 
+            success: false, 
+            token: null, 
+            realAddress: null 
+        });
+    } catch (err) {
+        console.error(err);
+        res.status(500).send("Error loading address vault page");
+    }
+});
+
+// =========================
+// RETRIEVE ORIGINAL ADDRESS
+// =========================
+
+
+app.post("/address-vault/retrieve", requireAdmin, async (req, res) => {
+    try {
+        const { token } = req.body;
+
+        if (!token) {
+            return res.status(400).send("Token is required");
+        }
+
+        // Look up the token in the vault
+        const [rows] = await pool.execute(
+            'SELECT token, real_address FROM address_vault WHERE token = ?',
+            [token]
+        );
+
+        if (rows.length === 0) {
+            return res.status(404).send("Token not found in vault");
+        }
+
+        const realAddress = rows[0].real_address;
+
+        res.render("address-vault", { 
+            success: true, 
+            token: token, 
+            realAddress: realAddress 
+        });
+    } catch (err) {
+        console.error(err);
+        res.status(500).send("Error retrieving address");
+    }
+});
+
+// =========================
 // START SERVER
 // =========================
 
