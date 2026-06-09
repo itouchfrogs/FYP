@@ -108,6 +108,15 @@ function generalizeAge(age) {
 
 const crypto = require('crypto');
 
+const ENCRYPTION_KEY = crypto
+    .createHash('sha256')
+    .update('dot dot dot') // change this to your own secret
+    .digest();
+
+const IV_LENGTH = 16;
+
+const crypto = require('crypto');
+
 function generateAddressToken(length = 16) {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
     let token = '';
@@ -483,6 +492,41 @@ app.post("/players/add", requireAdmin, async (req, res) => {
         const noisedServerId = dpServerId(serverId);
         const addressToken = await saveAddressToVault(address);
         const generalizedAge = generalizeAge(age);
+
+    function encrypt(text) {
+        const iv = crypto.randomBytes(IV_LENGTH);
+
+        const cipher = crypto.createCipheriv(
+            'aes-256-cbc',
+            ENCRYPTION_KEY,
+            iv
+        );
+
+        let encrypted = cipher.update(text.toString(), 'utf8', 'hex');
+        encrypted += cipher.final('hex');
+    
+            return iv.toString('hex') + ':' + encrypted;
+        }
+
+    function decrypt(encryptedText) {
+        const parts = encryptedText.split(':');
+
+        const iv = Buffer.from(parts.shift(), 'hex');
+        const encrypted = parts.join(':');
+
+        const decipher = crypto.createDecipheriv(
+            'aes-256-cbc',
+            ENCRYPTION_KEY,
+            iv
+        );
+
+        let decrypted = decipher.update(encrypted, 'hex', 'utf8');
+        decrypted += decipher.final('utf8');
+
+            return decrypted;
+        }
+    
+        
 
         let swappedRegionValue = regionValue;
 
