@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Player Check</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      background: #f3f4f6;
+      color: #111827;
+    }
+
+    .navbar {
+      background: #111827;
+      color: #f9fafb;
+      padding: 16px 24px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .navbar .brand {
+      font-size: 1.25rem;
+      font-weight: 700;
+    }
+
+    .navbar nav {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .navbar a {
+      color: #f9fafb;
+      text-decoration: none;
+      padding: 8px 12px;
+      border-radius: 6px;
+      transition: background 0.2s ease;
+    }
+
+    .navbar a:hover {
+      background: rgba(255, 255, 255, 0.12);
+    }
+
+    .navbar a.active {
+      background: #2563eb;
+    }
+
+    .page-content {
+      max-width: 1300px;
+      margin: 28px auto;
+      padding: 0 20px;
+    }
+
+    .page-title {
+      margin-top: 0;
+      margin-bottom: 18px;
+      font-size: 2rem;
+    }
+
+    .page-subtitle {
+      margin-top: 0;
+      color: #6b7280;
+      margin-bottom: 20px;
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+      background: #ffffff;
+      border-radius: 12px;
+      box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 1100px;
+    }
+
+    th, td {
+      padding: 12px 10px;
+      border-bottom: 1px solid #e5e7eb;
+      text-align: left;
+      vertical-align: top;
+      font-size: 0.95rem;
+    }
+
+    th {
+      background: #f9fafb;
+      color: #111827;
+      font-weight: 700;
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+
+    tr:hover td {
+      background: #f8fafc;
+    }
+
+    .empty {
+      padding: 24px;
+      color: #6b7280;
+    }
+  </style>
+</head>
+<body>
+  <header class="navbar">
+    <div class="brand">MPL Singapore</div>
+    <nav>
+      <a href="/">Home</a>
+      <a href="/employeepage">Employee Dashboard</a>
+      <a href="/playercheck" class="active">Player Check</a>
+      <a href="/logout">Logout</a>
+    </nav>
+  </header>
+
+  <main class="page-content">
+    <h1 class="page-title">Player Check</h1>
+    <p class="page-subtitle">Employee-only, unanonymized player data.</p>
+
+    <div class="table-wrap">
+      <% if (!players || players.length === 0) { %>
+        <div class="empty">No player records found.</div>
+      <% } else { %>
+        <table>
+          <thead>
+            <tr>
+              <th>Player ID</th>
+              <th>Name</th>
+              <th>Age</th>
+              <th>IC</th>
+              <th>Phone Number</th>
+              <th>Email</th>
+              <th>Username</th>
+              <th>Account ID</th>
+              <th>Server ID</th>
+              <th>Address</th>
+              <th>Address Token</th>
+              <th>Postal Code</th>
+              <th>Region</th>
+              <th>Swapped Region</th>
+              <th>Country</th>
+              <th>Team</th>
+              <th>Role</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% players.forEach(player => { %>
+              <tr>
+                <td><%= player.playerId %></td>
+                <td><%= player.name || '-' %></td>
+                <td><%= player.age || '-' %></td>
+                <td><%= player.ic || '-' %></td>
+                <td><%= player.phoneNumber || '-' %></td>
+                <td><%= player.email || '-' %></td>
+                <td><%= player.username || '-' %></td>
+                <td><%= player.accountId || '-' %></td>
+                <td><%= player.serverId || '-' %></td>
+                <td><%= player.address || '-' %></td>
+                <td><%= player.addressToken || '-' %></td>
+                <td><%= player.postalCode || '-' %></td>
+                <td><%= player.region || '-' %></td>
+                <td><%= player.swappedRegion || '-' %></td>
+                <td><%= player.country || '-' %></td>
+                <td><%= player.teamName || '-' %></td>
+                <td><%= player.role || '-' %></td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      <% } %>
+    </div>
+  </main>
+</body>
+</html>
