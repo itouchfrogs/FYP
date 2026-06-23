@@ -91,7 +91,7 @@ function generateAddressToken(length = 16) {
         token += chars[bytes[i] % chars.length];
     }
     return token;
-}
+} 
 
 // Saves the real address in the vault table and returns the token.
 async function saveAddressToVault(realAddress) {
@@ -127,6 +127,13 @@ function requireAdmin(req, res, next) {
         return next();
     }
     return res.redirect('/login');
+}
+
+function requireEmployee(req, res, next) {
+    if (req.session && (req.session.role === 'employee' || req.session.role === 'admin')) {
+        return next();
+    }
+    return res.redirect('/employeelogin');
 }
 
 // =========================
@@ -291,6 +298,65 @@ app.get('/adminpage', requireAdmin, (req, res) => {
     res.render('adminpage');
 });
 
+app.get('/employeelogin', (req, res) => {
+    res.render('employeelogin', { error: null });
+});
+
+app.post('/employeelogin', async (req, res) => {
+    try {
+        const { name, password } = req.body;
+
+        let rows;
+        try {
+            [rows] = await pool.execute(
+                'SELECT employeeId, name, password FROM eployees WHERE name = ? LIMIT 1',
+                [name]
+            );
+        } catch (err) {
+            if (err.code !== 'ER_NO_SUCH_TABLE') {
+                throw err;
+            }
+
+            [rows] = await pool.execute(
+                'SELECT employeeId, name, password FROM employees WHERE name = ? LIMIT 1',
+                [name]
+            );
+        }
+
+        if (rows.length === 0) {
+            return res.render('employeelogin', { error: 'Invalid name or password' });
+        }
+
+        const user = rows[0];
+
+        let match = false;
+        try {
+            match = await bcrypt.compare(password, user.password);
+        } catch (e) {
+            match = false;
+        }
+        if (!match && password === user.password) {
+            match = true;
+        }
+
+        if (!match) {
+            return res.render('employeelogin', { error: 'Invalid name or password' });
+        }
+
+        req.session.employeeId = user.employeeId;
+        req.session.role = 'employee';
+
+        res.redirect('/employeepage');
+    } catch (err) {
+        console.error(err);
+        res.status(500).send('Employee login error');
+    }
+});
+
+app.get('/employeepage', requireEmployee, (req, res) => {
+    res.render('employeepage');
+});
+
 app.post('/playerlogin', async (req, res) => {
     try {
         const { email, password } = req.body;
@@ -372,6 +438,39 @@ app.get('/players', async (req, res) => {
     } catch (err) {
         console.error('Error loading players:', err);
         res.status(500).send('Error loading players');
+    }
+});
+
+app.get('/playercheck', requireEmployee, async (req, res) => {
+    try {
+        const [players] = await pool.execute(`
+            SELECT
+                p.playerId,
+                p.name,
+                p.age,
+                p.ic,
+                p.phoneNumber,
+                p.email,
+                p.username,
+                p.accountId,
+                p.serverId,
+                p.address AS addressToken,
+                av.real_address AS address,
+                p.postalCode,
+                p.region,
+                p.swappedRegion,
+                p.country,
+                p.teamName,
+                p.role
+            FROM player p
+            LEFT JOIN address_vault av ON p.address = av.token
+            ORDER BY p.teamName ASC, p.name ASC
+        `);
+
+        res.render('playercheck', { players });
+    } catch (err) {
+        console.error('Error loading playercheck:', err);
+        res.status(500).send('Error loading player check page');
     }
 });
 
