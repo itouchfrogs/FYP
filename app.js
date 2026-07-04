@@ -192,15 +192,16 @@ app.post('/login', async (req, res) => {
             return res.status(401).send('Invalid username or password');
         }
 
-        if (admin.role && admin.role !== 'admin') {
-            return res.status(403).send('User does not have admin privileges');
+        if (admin.role && admin.role !== 'admin' && admin.role !== 'employee') {
+            return res.status(403).send('User does not have access');
         }
 
         req.session.adminId = admin.adminId;
         req.session.role = admin.role || 'admin';
 
         console.log('DEBUG LOGIN: Session set - adminId=', req.session.adminId, 'role=', req.session.role);
-        res.redirect('/adminpage');
+
+        res.redirect(admin.role === 'employee' ? '/employee' : '/adminpage');
     } catch (err) {
         console.error(err);
         res.status(500).send('Login error');
