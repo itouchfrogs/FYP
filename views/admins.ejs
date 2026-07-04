@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Admin/Employee Accounts</title>
+</head>
+<body>
+    <h1>Admin Accounts</h1>
+    
+    <p><a href="/admins/add">Add New Admin Account</a></p>
+    <p><a href="/adminpage">Back to Admin Page</a></p>
+    
+    <% if (admins && admins.length > 0) { %>
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Username</th>
+                    <th>Role</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                <% admins.forEach(function(admin) { %>
+                    <tr>
+                        <td><%= admin.adminId %></td>
+                        <td><%= admin.username %></td>
+                        <td><%= admin.role %></td>
+                        <td>
+                            <form action="/admins/delete/<%= admin.adminId %>" method="POST" style="display:inline;">
+                                <button type="submit">Delete</button>
+                            </form>
+                        </td>
+                    </tr>
+                <% }) %>
+            </tbody>
+        </table>
+    <% } else { %>
+        <p>No admin accounts found.</p>
+    <% } %>
+</body>
+</html>
