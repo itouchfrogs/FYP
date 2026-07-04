@@ -503,7 +503,7 @@ app.get("/players/add", requireAdmin, async (req, res) => {
 
         const [teams] = await pool.execute(`
             SELECT DISTINCT teamName
-            FROM team
+            FROM teams
             WHERE teamName IS NOT NULL
             AND teamName != ''
             ORDER BY teamName ASC
@@ -534,10 +534,10 @@ app.post("/players/add", requireAdmin, async (req, res) => {
         moveFieldToEnd(req.body, 'singaporeRegion');
 
         const {
-
+            ic,
             name,
             age,
-            ic,
+            dateOfBirth,
             phoneNumber,
             email,
             username,
@@ -556,6 +556,9 @@ app.post("/players/add", requireAdmin, async (req, res) => {
         const regionValue = singaporeRegion || req.body.region || '';
         const noisedServerId = dpServerId(serverId);
         const addressToken = await saveAddressToVault(address);
+        const hashedPassword = await bcrypt.hash(password, 10);
+        const encryptedIC = encrypt(ic);
+        const encryptedPhone = encrypt(phoneNumber);
 
         let swappedRegionValue = regionValue;
 
@@ -582,10 +585,10 @@ app.post("/players/add", requireAdmin, async (req, res) => {
         await pool.execute(`
 
             INSERT INTO player (
-
+                ic,
                 name,
                 age,
-                ic,
+                dateOfBirth,
                 phoneNumber,
                 email,
                 username,
@@ -602,14 +605,14 @@ app.post("/players/add", requireAdmin, async (req, res) => {
 
             )
 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 
         `, [
-
+            encryptedIC,
             name,
             age,
-            ic,
-            phoneNumber,
+            dateOfBirth,
+            encryptedPhone,
             email,
             username,
             accountId,
@@ -621,7 +624,7 @@ app.post("/players/add", requireAdmin, async (req, res) => {
             country,
             teamName,
             role,
-            password
+            hashedPassword
 
         ]);
 
