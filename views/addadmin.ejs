@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Add Account</title>
+</head>
+<body>
+    <h1>Add New Account</h1>
+
+    <p>
+        <a href="/">Back</a>
+    </p>
+
+    <form action="/admins/add" method="POST">
+        <label for="username">Username:</label><br>
+        <input type="text" id="username" name="username" required><br><br>
+
+        <label for="password">Password:</label><br>
+        <input type="password" id="password" name="password" required><br><br>
+        <div>
+          <label for="role">Role</label>
+          <select id="role" name="role" required>
+            <option value="">Select Role</option>
+            <option value="admin">Admin</option>
+            <option value="employee">Employee</option>
+          </select>
+        </div>
+        <button type="submit">Create Account</button>
+    </form>
+</body>
+</html>
