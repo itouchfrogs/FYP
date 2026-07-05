@@ -96,12 +96,100 @@
     .button-row a:hover {
       background: #475569;
     }
+
+    .extract-row {
+      display: grid;
+      gap: 10px;
+      margin-bottom: 18px;
+    }
+
+    .extract-row button {
+      width: fit-content;
+      padding: 10px 16px;
+      border-radius: 10px;
+      border: none;
+      background: #0f766e;
+      color: #fff;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .extract-row button:hover {
+      background: #0d9488;
+    }
+
+    .extract-status {
+      font-size: 0.92rem;
+      color: #334155;
+      min-height: 18px;
+    }
+
+    .extract-help {
+      font-size: 0.9rem;
+      color: #475569;
+    }
+
+    .extract-example {
+      display: block;
+      width: min(360px, 100%);
+      border-radius: 10px;
+      border: 1px solid #d1d5db;
+      box-shadow: 0 8px 22px rgba(15, 23, 42, 0.08);
+      cursor: zoom-in;
+    }
+
+    .image-lightbox {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.72);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      z-index: 1000;
+    }
+
+    .image-lightbox.open {
+      display: flex;
+    }
+
+    .image-lightbox img {
+      max-width: min(980px, 94vw);
+      max-height: 88vh;
+      border-radius: 12px;
+      border: 1px solid #cbd5e1;
+      box-shadow: 0 14px 45px rgba(2, 6, 23, 0.4);
+      background: #fff;
+    }
+
+    .image-lightbox .close-hint {
+      position: absolute;
+      top: 14px;
+      right: 18px;
+      color: #e2e8f0;
+      font-size: 0.9rem;
+    }
   </style>
 </head>
 <body>
   <div class="form-card">
     <h1>Add New Player</h1>
     <form action="/players/add" method="POST">
+      <div class="extract-row">
+        <label for="profileImage">Upload Profile Screenshot (Optional)</label>
+        <div class="extract-help"><strong>Example:</strong> Use a screenshot from MLBB Account Profile.</div>
+        <img
+          src="/images/accountexample.jpeg"
+          alt="Example profile screenshot format"
+          class="extract-example"
+          id="exampleImage"
+        />
+        <div class="extract-help">Only these file types are supported: jpg, jpeg, png, webp, gif.</div>
+        <input id="profileImage" name="profileImage" type="file" accept="image/*" />
+        <button type="button" id="extractProfileBtn">Extract From Image</button>
+        <div id="extractStatus" class="extract-status"></div>
+      </div>
+
       <div class="form-grid">
         <div>
           <label for="name">Name</label>
@@ -391,5 +479,115 @@
       </div>
     </form>
   </div>
+
+  <div id="imageLightbox" class="image-lightbox" aria-hidden="true">
+    <div class="close-hint">Click outside image or press Esc to close</div>
+    <img src="/images/accountexample.jpeg" alt="Expanded example profile screenshot" id="lightboxImage" />
+  </div>
+
+  <script>
+    (function () {
+      const extractButton = document.getElementById('extractProfileBtn');
+      const imageInput = document.getElementById('profileImage');
+      const statusEl = document.getElementById('extractStatus');
+      const exampleImage = document.getElementById('exampleImage');
+      const imageLightbox = document.getElementById('imageLightbox');
+      const lightboxImage = document.getElementById('lightboxImage');
+
+      function setInputValue(id, value) {
+        if (!value) {
+          return;
+        }
+        const el = document.getElementById(id);
+        if (el) {
+          el.value = value;
+        }
+      }
+
+      function openLightbox() {
+        imageLightbox.classList.add('open');
+        imageLightbox.setAttribute('aria-hidden', 'false');
+      }
+
+      function closeLightbox() {
+        imageLightbox.classList.remove('open');
+        imageLightbox.setAttribute('aria-hidden', 'true');
+      }
+
+      if (exampleImage && imageLightbox && lightboxImage) {
+        exampleImage.addEventListener('click', openLightbox);
+
+        imageLightbox.addEventListener('click', function (event) {
+          if (event.target === imageLightbox) {
+            closeLightbox();
+          }
+        });
+
+        document.addEventListener('keydown', function (event) {
+          if (event.key === 'Escape' && imageLightbox.classList.contains('open')) {
+            closeLightbox();
+          }
+        });
+      }
+
+      extractButton.addEventListener('click', async function () {
+        const file = imageInput.files && imageInput.files[0];
+        if (!file) {
+          statusEl.textContent = 'Please choose an image first.';
+          return;
+        }
+
+        statusEl.textContent = 'Extracting text from image...';
+
+        try {
+          const formData = new FormData();
+          formData.append('profileImage', file);
+
+          const response = await fetch('/players/extract-image', {
+            method: 'POST',
+            body: formData
+          });
+
+          const contentType = (response.headers.get('content-type') || '').toLowerCase();
+          if (!contentType.includes('application/json')) {
+            statusEl.textContent = 'Session expired. Please log in again, then retry extraction.';
+            return;
+          }
+
+          const result = await response.json();
+
+          if (!response.ok) {
+            statusEl.textContent = result.error || 'Failed to extract from image.';
+            return;
+          }
+
+          const fields = result.fields || {};
+          const extracted = {
+            username: fields.username || '',
+            accountId: fields.accountId || '',
+            serverId: fields.serverId || ''
+          };
+
+          setInputValue('username', extracted.username);
+          setInputValue('accountId', extracted.accountId);
+          setInputValue('serverId', extracted.serverId);
+
+          const extractedCount = Object.values(extracted).filter(Boolean).length;
+          if (extractedCount === 0) {
+            statusEl.textContent = 'No fields detected. Try a clearer screenshot (crop around name + ID line).';
+            return;
+          }
+
+          statusEl.textContent =
+            'Extraction complete: ' +
+            'username=' + (extracted.username || '-') + ', ' +
+            'accountId=' + (extracted.accountId || '-') + ', ' +
+            'serverId=' + (extracted.serverId || '-') + '. Please review before saving.';
+        } catch (err) {
+          statusEl.textContent = 'Extraction failed. Try another image.';
+        }
+      });
+    })();
+  </script>
 </body>
 </html>
