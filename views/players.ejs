@@ -117,10 +117,32 @@
         border-radius: 14px;
         box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
         padding: 24px;
+        border: 2px solid #d1d5db;
+      }
+
+      .team-group {
+        margin-bottom: 28px;
+        border: 2px solid #cbd5e1;
+        border-radius: 10px;
+        padding: 16px;
+        background: #f8fafc;
+      }
+
+      .team-group:last-child {
+        margin-bottom: 0;
+      }
+
+      .team-title {
+        margin: 0 0 14px 0;
+        font-size: 1.2rem;
+        color: #1f2937;
+        border-bottom: 2px solid #9ca3af;
+        padding-bottom: 8px;
+        font-weight: 700;
       }
 
       .player-card {
-        border: 1px solid #e5e7eb;
+        border: 2px solid #d1d5db;
         border-radius: 8px;
         padding: 16px;
         margin-bottom: 16px;
@@ -130,6 +152,7 @@
 
       .player-card:hover {
         box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
+        border-color: #94a3b8;
       }
 
       .player-card h3 {
@@ -182,6 +205,7 @@
         <button class="dropdown-btn">Dashboards ▼</button>
         <div class="dropdown-content">
           <a href="/playerpage">Player Dashboard</a>
+          <a href="/employeepage">Employee Dashboard</a>
           <a href="/adminpage">Admin Dashboard</a>
         </div>
       </div>
@@ -223,35 +247,51 @@
 
             return 'Unknown';
           }
+
+          const groupedPlayers = players.reduce((groups, player) => {
+            const team = player.teamName || 'Unassigned Team';
+            if (!groups[team]) {
+              groups[team] = [];
+            }
+            groups[team].push(player);
+            return groups;
+          }, {});
+
+          const sortedTeams = Object.keys(groupedPlayers).sort((a, b) =>
+            a.localeCompare(b)
+          );
         %>
-        <% players.forEach(player => { %>
-          <div class="player-card">
-            <h3><%= player.name %></h3>
-            <p><strong>Age:</strong> <%= generalizeAge(player.age) %></p>
-            <p>
-              <strong>Email:</strong>
-              <%
-                const email = player.email || '';
-                const at = email.indexOf('@');
-                let maskedEmail = email;
-                if (at > 0) {
-                  const name = email.slice(0, at);
-                  const domain = email.slice(at);
-                  maskedEmail = name[0] + '*****' + domain;
-                }
-              %>
-              <%= maskedEmail %>
-            </p>
-            <p><strong>Username:</strong> <%= player.username %></p>
-            <p><strong>Team:</strong> <%= player.teamName %></p>
-            <p><strong>Role:</strong> <%= player.role %></p>
-            <p><strong>Region:</strong> <%= player.region %></p>
-            <p><strong>SwappedRegion:</strong> <%= player.swappedRegion || 'N/A' %></p>
-            <p><strong>ServerId:</strong> <%= player.serverId || 'N/A' %></p>
-            <form action="/players/delete/<%= player.playerId %>" method="POST">
-              <button type="submit">Delete Player</button>
-            </form>
-          </div>
+        <% sortedTeams.forEach(team => { %>
+          <section class="team-group">
+            <h2 class="team-title"><%= team %></h2>
+
+            <% groupedPlayers[team].forEach(player => { %>
+              <div class="player-card">
+                <h3><%= player.username %></h3>
+                <p><strong>Age:</strong> <%= generalizeAge(player.age) %></p>
+                <p>
+                  <strong>Email:</strong>
+                  <%
+                    const email = player.email || '';
+                    const at = email.indexOf('@');
+                    let maskedEmail = email;
+                    if (at > 0) {
+                      const name = email.slice(0, at);
+                      const domain = email.slice(at);
+                      maskedEmail = name[0] + '*****' + domain;
+                    }
+                  %>
+                  <%= maskedEmail %>
+                </p>
+                <p><strong>Name:</strong> <%= player.name %></p>
+                <p><strong>Team:</strong> <%= player.teamName %></p>
+                <p><strong>Role:</strong> <%= player.role %></p>
+                <p><strong>Region:</strong> <%= player.region %></p>
+                <p><strong>SwappedRegion:</strong> <%= player.swappedRegion || 'N/A' %></p>
+                <p><strong>ServerId:</strong> <%= player.serverId || 'N/A' %></p>
+              </div>
+            <% }) %>
+          </section>
         <% }) %>
       <% } %>
     </div>
