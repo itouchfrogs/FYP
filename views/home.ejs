@@ -116,7 +116,48 @@
       border-radius: 14px;
       box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
       padding: 32px;
+      text-align: center;
     }
+
+    .hero-logo {
+      width: 100%;
+      max-width: 240px;
+      height: auto;
+      display: block;
+      margin: 0 auto 20px;
+    }
+
+    .teams-section {
+      background: #ffffff;
+      border-radius: 14px;
+      box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+      padding: 28px;
+      margin-top: 24px;
+    }
+
+    .teams-title {
+      margin: 0 0 16px;
+      font-size: 1.5rem;
+    }
+
+    .teams-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 12px;
+    }
+
+    .teams-list li {
+      background: #f8fafc;
+      border: 1px solid #d1d5db;
+      border-radius: 10px;
+      padding: 12px 14px;
+      font-weight: 600;
+      color: #1f2937;
+    }
+
   </style>
 </head>
 <body>
@@ -141,8 +182,18 @@
 
   <main class="page-content">
     <section class="hero">
+      <img class="hero-logo" src="/images/MPL%20logo.png" alt="MPL Singapore logo">
       <h1 class="page-title">MLBB Professional League Singapore</h1>
       <p>Welcome to MPL Singapore. Use the navigation above to view players, add new players, manage teams, or sign in.</p>
+    </section>
+
+    <section class="teams-section">
+      <h2 class="teams-title">Participating Teams</h2>
+      <ul class="teams-list">
+        <% (typeof teams !== 'undefined' ? teams : []).forEach(team => { %>
+          <li><%= team.teamName %></li>
+        <% }) %>
+      </ul>
     </section>
   </main>
 
