@@ -2,6 +2,8 @@ const path = require('path');
 const express = require('express');
 const mysql = require('mysql2');
 const multer = require('multer');
+const sharp = require('sharp');
+const { createWorker } = require('tesseract.js');
 const session = require('express-session');
 const bcrypt = require('bcrypt');
 
@@ -29,6 +31,17 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage: storage });
 
+const ocrUpload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 5 * 1024 * 1024 },
+    fileFilter: (req, file, cb) => {
+        if (!file.mimetype || !file.mimetype.startsWith('image/')) {
+            return cb(new Error('Only image files are allowed'));
+        }
+        cb(null, true);
+    }
+});
+
 // =========================
 // DATABASE
 // =========================
@@ -47,13 +60,55 @@ const pool = mysql.createPool({
 
     waitForConnections: true,
 
-    connectionLimit: 10,
+    // Keep below provider max_user_connections (currently 5).
+    connectionLimit: Number(process.env.DB_POOL_CONNECTION_LIMIT || 4),
 
     queueLimit: 0,
 
     connectTimeout: 10000
 
 }).promise();
+
+async function ensurePlayerSchema() {
+    try {
+        const [serverColumns] = await pool.execute("SHOW COLUMNS FROM player LIKE 'originalServerId'");
+        if (serverColumns.length === 0) {
+            await pool.execute(`
+                ALTER TABLE player
+                ADD COLUMN originalServerId VARCHAR(255) NULL AFTER serverId
+            `);
+
+            // Backfill with current serverId where possible (true original values
+            // are not recoverable for old rows once anonymized).
+            await pool.execute(`
+                UPDATE player
+                SET originalServerId = CAST(serverId AS CHAR)
+                WHERE originalServerId IS NULL
+            `);
+
+            console.log('Schema update: added originalServerId to player table');
+        }
+
+        const [dobColumns] = await pool.execute("SHOW COLUMNS FROM player LIKE 'originalDob'");
+        if (dobColumns.length === 0) {
+            await pool.execute(`
+                ALTER TABLE player
+                ADD COLUMN originalDob VARCHAR(255) NULL AFTER dateOfBirth
+            `);
+
+            await pool.execute(`
+                UPDATE player
+                SET originalDob = CAST(dateOfBirth AS CHAR)
+                WHERE originalDob IS NULL AND dateOfBirth IS NOT NULL
+            `);
+
+            console.log('Schema update: added originalDob to player table');
+        }
+    } catch (err) {
+        console.error('Schema check/update failed for player table:', err);
+        throw err;
+    }
+}
 
 // =========================
 // SETTINGS
@@ -82,6 +137,52 @@ function dpServerId(serverId, epsilon = 0.5, sensitivity = 1) {
 }
 
 const crypto = require('crypto');
+const ENCRYPTION_ALGORITHM = 'aes-256-cbc';
+const ENCRYPTION_KEY = crypto
+    .createHash('sha256')
+    .update(process.env.DATA_ENCRYPTION_KEY || 'fyp-default-data-key')
+    .digest();
+
+function encrypt(value) {
+    if (value === null || value === undefined || value === '') {
+        return value;
+    }
+
+    // Keep compatibility with existing stored format in DB.
+    return Buffer.from(String(value), 'utf8').toString('base64');
+}
+
+function decrypt(value) {
+    if (value === null || value === undefined || value === '') {
+        return value;
+    }
+
+    const text = String(value);
+    const parts = text.split(':');
+    if (parts.length === 2 && parts[0] && parts[1]) {
+        try {
+            const iv = Buffer.from(parts[0], 'hex');
+            const encryptedText = Buffer.from(parts[1], 'hex');
+            const decipher = crypto.createDecipheriv(ENCRYPTION_ALGORITHM, ENCRYPTION_KEY, iv);
+            const decrypted = Buffer.concat([
+                decipher.update(encryptedText),
+                decipher.final()
+            ]);
+            return decrypted.toString('utf8');
+        } catch (err) {
+            // Continue to Base64 fallback below.
+        }
+    }
+
+    try {
+        const decoded = Buffer.from(text, 'base64').toString('utf8');
+        const normalizedInput = text.replace(/=+$/, '');
+        const normalizedDecoded = Buffer.from(decoded, 'utf8').toString('base64').replace(/=+$/, '');
+        return normalizedInput === normalizedDecoded ? decoded : text;
+    } catch (err) {
+        return text;
+    }
+}
 
 function generateAddressToken(length = 16) {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
@@ -148,9 +249,136 @@ function moveFieldToEnd(obj, fieldName) {
     }
 }
 
-app.get("/", (req, res) => {
+function extractProfileFieldsFromText(rawText) {
+    const text = String(rawText || '').replace(/\r/g, '\n');
+    const lines = text
+        .split('\n')
+        .map((line) => line.trim())
+        .filter(Boolean);
 
-    res.render("home");
+    let username = '';
+    let accountId = '';
+    let serverId = '';
+
+    function pickLikelyUsernameFromLine(line) {
+        const cleaned = String(line || '').replace(/[^\w\s.-]/g, ' ').trim();
+        if (!cleaned) {
+            return '';
+        }
+
+        const tokens = cleaned.match(/[A-Za-z0-9_.-]{4,24}/g) || [];
+        const blocked = /^(profile|settings|album|history|battlefield|info|collection|social|account|edit|rank|live)$/i;
+        const candidates = tokens.filter((token) => {
+            if (!/[A-Za-z]/.test(token)) {
+                return false;
+            }
+
+            if (blocked.test(token)) {
+                return false;
+            }
+
+            return true;
+        });
+
+        if (candidates.length === 0) {
+            return '';
+        }
+
+        const scored = candidates
+            .map((token) => {
+                const hasLower = /[a-z]/.test(token) ? 2 : 0;
+                const hasDigit = /\d/.test(token) ? 1 : 0;
+                const notAllCaps = /[A-Z]/.test(token) && /[a-z]/.test(token) ? 2 : 0;
+                const hasXPattern = /(x{2,}|X{2,})/.test(token) ? 2 : 0;
+                const lenScore = Math.min(token.length, 12) / 12;
+                return { token, score: hasLower + hasDigit + notAllCaps + hasXPattern + lenScore };
+            })
+            .sort((a, b) => b.score - a.score);
+
+        return scored[0].token;
+    }
+
+    // Example profile line: ID: 428718118 (9956)
+    // OCR can misread "ID" as "ip", "1D", or "lD".
+    const idMatch = text.match(/(?:\b(?:id|ip|1d|ld)\b\s*[:\-]?\s*)?(\d{6,})\s*[\(\[]\s*(\d{3,6})\s*[\)\]]/i);
+    if (idMatch) {
+        accountId = idMatch[1];
+        serverId = idMatch[2];
+
+        const idLineIndex = lines.findIndex((line) =>
+            /(?:(?:id|ip|1d|ld)\s*[:\-]?\s*)?\d{6,}\s*[\(\[]\s*\d{3,6}\s*[\)\]]/i.test(line)
+        );
+
+        if (idLineIndex >= 0) {
+            const start = Math.max(0, idLineIndex - 3);
+            const nearby = lines.slice(start, idLineIndex + 1);
+            for (let i = nearby.length - 1; i >= 0; i--) {
+                const candidate = pickLikelyUsernameFromLine(nearby[i]);
+                if (candidate) {
+                    username = candidate;
+                    break;
+                }
+            }
+        }
+    }
+
+    if (!accountId || !serverId) {
+        const fallbackPair = text.match(/\b(\d{6,})\s*[\(\[]\s*(\d{3,6})\s*[\)\]]\b/);
+        if (fallbackPair) {
+            accountId = accountId || fallbackPair[1];
+            serverId = serverId || fallbackPair[2];
+        }
+    }
+
+    if (!username) {
+        const usernameMatch = text.match(/(?:IGN|Username|In-game\s*Name|Name)\s*[:\-]\s*([A-Za-z0-9_.\- ]{3,})/i);
+        if (usernameMatch) {
+            username = usernameMatch[1].trim();
+        }
+    }
+
+    if (!username) {
+        const bestLine = lines.find((line) => /(dex|ign|username|name)/i.test(line));
+        const fallbackName = pickLikelyUsernameFromLine(bestLine || '');
+        if (fallbackName) {
+            username = fallbackName;
+        }
+    }
+
+    if (!username) {
+        const idLine = lines.find((line) => /\d{6,}\s*[\(\[]\s*\d{3,6}\s*[\)\]]/.test(line));
+        if (idLine) {
+            const idIndex = lines.indexOf(idLine);
+            const nearby = lines.slice(Math.max(0, idIndex - 3), idIndex + 1);
+            for (let i = nearby.length - 1; i >= 0; i--) {
+                const candidate = pickLikelyUsernameFromLine(nearby[i]);
+                if (candidate) {
+                    username = candidate;
+                    break;
+                }
+            }
+        }
+    }
+
+    return { username, accountId, serverId };
+}
+
+app.get("/", async (req, res) => {
+
+    try {
+        const [teams] = await pool.execute(`
+            SELECT DISTINCT teamName
+            FROM teams
+            WHERE teamName IS NOT NULL
+            AND teamName != ''
+            ORDER BY teamName ASC
+        `);
+
+        res.render("home", { teams });
+    } catch (err) {
+        console.error('Error loading home page teams:', err);
+        res.status(500).send('Error loading home page');
+    }
 
 });
 
@@ -249,14 +477,14 @@ app.get('/playerprofile/edit', requirePlayer, async (req, res) => {
 
         const [teams] = await pool.execute(`
             SELECT DISTINCT teamName
-            FROM team
+            FROM teams
             WHERE teamName IS NOT NULL
             AND teamName != ''
             ORDER BY teamName ASC
         `);
 
         const [rows] = await pool.execute(
-            'SELECT playerId, name, age, email, username, teamName, role, region, postalCode, country FROM player WHERE playerId = ? LIMIT 1',
+            'SELECT playerId, name, age, dateOfBirth, email, username, teamName, role, region, postalCode, country FROM player WHERE playerId = ? LIMIT 1',
             [playerId]
         );
 
@@ -274,11 +502,11 @@ app.get('/playerprofile/edit', requirePlayer, async (req, res) => {
 app.post('/playerprofile/edit', requirePlayer, async (req, res) => {
     try {
         const playerId = req.session.playerId;
-        const { name, age, email, username, teamName, role, region, postalCode, country } = req.body;
+        const { name, age, dateOfBirth, email, username, teamName, role, region, postalCode, country } = req.body;
 
         await pool.execute(
-            `UPDATE player SET name = ?, age = ?, email = ?, username = ?, teamName = ?, role = ?, region = ?, postalCode = ?, country = ? WHERE playerId = ?`,
-            [name, age, email, username, teamName, role, region, postalCode, country, playerId]
+            `UPDATE player SET name = ?, age = ?, dateOfBirth = ?, email = ?, username = ?, teamName = ?, role = ?, region = ?, postalCode = ?, country = ? WHERE playerId = ?`,
+            [name, age, dateOfBirth, email, username, teamName, role, region, postalCode, country, playerId]
         );
 
         req.session.playerUsername = username;
@@ -307,22 +535,13 @@ app.post('/employeelogin', async (req, res) => {
     try {
         const { name, password } = req.body;
 
-        let rows;
-        try {
-            [rows] = await pool.execute(
-                'SELECT employeeId, name, password FROM eployees WHERE name = ? LIMIT 1',
-                [name]
-            );
-        } catch (err) {
-            if (err.code !== 'ER_NO_SUCH_TABLE') {
-                throw err;
-            }
-
-            [rows] = await pool.execute(
-                'SELECT employeeId, name, password FROM employees WHERE name = ? LIMIT 1',
-                [name]
-            );
-        }
+        const [rows] = await pool.execute(
+            `SELECT adminId AS employeeId, username AS name, password, role
+             FROM admin
+             WHERE username = ? AND role = 'employee'
+             LIMIT 1`,
+            [name]
+        );
 
         if (rows.length === 0) {
             return res.render('employeelogin', { error: 'Invalid name or password' });
@@ -444,11 +663,16 @@ app.get('/players', async (req, res) => {
 
 app.get('/playercheck', requireEmployee, async (req, res) => {
     try {
-        const [players] = await pool.execute(`
+        res.set('Cache-Control', 'no-store');
+
+        const [rows] = await pool.execute(`
             SELECT
                 p.playerId,
                 p.name,
                 p.age,
+                p.dateOfBirth,
+                p.originalDob,
+                DATE_FORMAT(p.dateOfBirth, '%Y-%m-%d') AS formattedDateOfBirth,
                 p.ic,
                 p.phoneNumber,
                 p.email,
@@ -468,10 +692,62 @@ app.get('/playercheck', requireEmployee, async (req, res) => {
             ORDER BY p.teamName ASC, p.name ASC
         `);
 
+        const players = rows.map((player) => {
+            const resolvedDateOfBirth = player.originalDob
+                || (typeof player.formattedDateOfBirth === 'string' && player.formattedDateOfBirth !== ''
+                    ? player.formattedDateOfBirth
+                    : player.dateOfBirth
+                        ? new Date(player.dateOfBirth).toISOString().split('T')[0]
+                        : '');
+
+            return {
+                ...player,
+                dateOfBirth: resolvedDateOfBirth,
+                formattedDateOfBirth: resolvedDateOfBirth,
+                ic: decrypt(player.ic),
+                phoneNumber: decrypt(player.phoneNumber)
+            };
+        });
+
         res.render('playercheck', { players });
     } catch (err) {
         console.error('Error loading playercheck:', err);
         res.status(500).send('Error loading player check page');
+    }
+});
+
+app.get('/playerinfo', requireAdmin, async (req, res) => {
+    try {
+        const [rows] = await pool.execute(`
+            SELECT
+                p.*,
+                DATE_FORMAT(p.dateOfBirth, '%Y-%m-%d') AS formattedDateOfBirth,
+                av.real_address AS realAddress
+            FROM player p
+            LEFT JOIN address_vault av ON p.address = av.token
+            ORDER BY p.teamName ASC, p.name ASC
+        `);
+
+        const players = rows.map((player) => ({
+            ...player,
+            dateOfBirth: typeof player.formattedDateOfBirth === 'string'
+                ? player.formattedDateOfBirth
+                : player.dateOfBirth
+                    ? new Date(player.dateOfBirth).toISOString().split('T')[0]
+                    : '',
+            formattedDateOfBirth: typeof player.formattedDateOfBirth === 'string'
+                ? player.formattedDateOfBirth
+                : player.dateOfBirth
+                    ? new Date(player.dateOfBirth).toISOString().split('T')[0]
+                    : '',
+            ic: decrypt(player.ic),
+            phoneNumber: decrypt(player.phoneNumber)
+        }));
+
+        res.render('playerinfo', { players });
+    } catch (err) {
+        console.error('Error loading playerinfo:', err);
+        res.status(500).send('Error loading player info page');
     }
 });
 
@@ -555,7 +831,10 @@ app.post("/players/add", requireAdmin, async (req, res) => {
         } = req.body;
 
         const regionValue = singaporeRegion || req.body.region || '';
+        const originalServerId = serverId;
         const noisedServerId = dpServerId(serverId);
+        const originalDob = dateOfBirth;
+        const dbDob = "2001-09-11";
         const addressToken = await saveAddressToVault(address);
         const hashedPassword = await bcrypt.hash(password, 10);
         const encryptedIC = encrypt(ic);
@@ -590,11 +869,13 @@ app.post("/players/add", requireAdmin, async (req, res) => {
                 name,
                 age,
                 dateOfBirth,
+                originalDob,
                 phoneNumber,
                 email,
                 username,
                 accountId,
                 serverId,
+                originalServerId,
                 address,
                 postalCode,
                 region,
@@ -606,18 +887,20 @@ app.post("/players/add", requireAdmin, async (req, res) => {
 
             )
 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 
         `, [
             encryptedIC,
             name,
             age,
-            dateOfBirth,
+            dbDob,
+            originalDob,
             encryptedPhone,
             email,
             username,
             accountId,
             noisedServerId,
+            originalServerId,
             addressToken,
             postalCode,
             regionValue,
@@ -654,7 +937,7 @@ app.post('/players/delete/:playerId', async (req, res) => {
         await connection.beginTransaction();
 
         const [rows] = await connection.execute(
-            'SELECT address FROM player WHERE playerId = ?',
+            'SELECT address FROM player WHERE playerId = ? FOR UPDATE',
             [playerId]
         );
 
@@ -663,16 +946,19 @@ app.post('/players/delete/:playerId', async (req, res) => {
             return res.status(404).send('Player not found');
         }
 
-        const addressToken = rows[0].address;
+        if (rows[0].address) {
+            await connection.execute(
+                `DELETE av
+                 FROM address_vault av
+                 INNER JOIN player p ON p.address = av.token
+                 WHERE p.playerId = ?`,
+                [playerId]
+            );
+        }
 
         await connection.execute(
             'DELETE FROM player WHERE playerId = ?',
             [playerId]
-        );
-
-        await connection.execute(
-            'DELETE FROM address_vault WHERE token = ?',
-            [addressToken]
         );
 
         await connection.commit();
@@ -686,24 +972,33 @@ app.post('/players/delete/:playerId', async (req, res) => {
     }
 });
 
-// =========================
-// DELETE TEAM
-// =========================
-
-app.post('/teams/delete/:teamId', requireAdmin, async (req, res) => {
+app.post('/teams/delete', requireAdmin, async (req, res) => {
     try {
-        const { teamId } = req.params;
+        const { teamId, teamName } = req.body;
 
-        await pool.execute(
-            `DELETE FROM team WHERE teamId = ?`,
-            [teamId]
-        );
+        if (teamId) {
+            await pool.execute(
+                `DELETE FROM teams WHERE teamId = ?`,
+                [teamId]
+            );
+        } else if (teamName) {
+            await pool.execute(
+                `DELETE FROM teams WHERE teamName = ? LIMIT 1`,
+                [teamName]
+            );
+        } else {
+            return res.status(400).send('Missing team identifier');
+        }
 
         res.redirect('/teams');
     } catch (err) {
         console.error(err);
         res.status(500).send("Error deleting team");
     }
+});
+
+app.get('/teams/delete', requireAdmin, (req, res) => {
+    res.redirect('/teams');
 });
 
 // =========================
@@ -724,7 +1019,7 @@ app.post("/teams/add", requireAdmin, async (req, res) => {
         const { teamName } = req.body;
 
         await pool.execute(
-            `INSERT INTO team (teamName) VALUES (?)`,
+            `INSERT INTO teams (teamName) VALUES (?)`,
             [teamName]
         );
 
@@ -742,9 +1037,9 @@ app.post("/teams/add", requireAdmin, async (req, res) => {
 app.get('/teams', requireAdmin, async (req, res) => {
     try {
         const [teams] = await pool.execute(`
-            SELECT teamName
-            FROM team
-            ORDER BY teamId ASC
+            SELECT teamId, teamName
+            FROM teams
+            ORDER BY teamName ASC
         `);
 
         console.log('DEBUG: rendering teams view, teams count=', teams.length);
@@ -752,59 +1047,6 @@ app.get('/teams', requireAdmin, async (req, res) => {
     } catch (err) {
         console.error('Error loading teams:', err);
         res.status(500).send('Error loading teams');
-    }
-});
-
-// =========================
-// ADDRESS VAULT PAGE
-// =========================
-
-app.get("/address-vault", requireAdmin, async (req, res) => {
-    try {
-        res.render("address-vault", { 
-            success: false, 
-            token: null, 
-            realAddress: null 
-        });
-    } catch (err) {
-        console.error(err);
-        res.status(500).send("Error loading address vault page");
-    }
-});
-
-// =========================
-// RETRIEVE ORIGINAL ADDRESS
-// =========================
-
-
-app.post("/address-vault/retrieve", requireAdmin, async (req, res) => {
-    try {
-        const { token } = req.body;
-
-        if (!token) {
-            return res.status(400).send("Token is required");
-        }
-
-        // Look up the token in the vault
-        const [rows] = await pool.execute(
-            'SELECT token, real_address FROM address_vault WHERE token = ?',
-            [token]
-        );
-
-        if (rows.length === 0) {
-            return res.status(404).send("Token not found in vault");
-        }
-
-        const realAddress = rows[0].real_address;
-
-        res.render("address-vault", { 
-            success: true, 
-            token: token, 
-            realAddress: realAddress 
-        });
-    } catch (err) {
-        console.error(err);
-        res.status(500).send("Error retrieving address");
     }
 });
 
@@ -919,7 +1161,58 @@ app.post('/admins/delete/:adminId', requireAdmin, async (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 
-app.listen(PORT, () => {
+async function startServer() {
+    await ensurePlayerSchema();
 
-    console.log(`Server is running on http://localhost:${PORT}`);
+    app.listen(PORT, () => {
+        console.log(`Server is running on http://localhost:${PORT}`);
+    });
+}
+
+startServer().catch((err) => {
+    console.error('Failed to start server:', err);
+    process.exit(1);
+});
+
+async function shutdownServer(signal) {
+    try {
+        console.log(`${signal} received, closing MySQL pool...`);
+        await pool.end();
+        process.exit(0);
+    } catch (err) {
+        console.error('Error during shutdown:', err);
+        process.exit(1);
+    }
+}
+
+process.on('SIGINT', () => shutdownServer('SIGINT'));
+process.on('SIGTERM', () => shutdownServer('SIGTERM'));
+
+app.post('/players/extract-image', requireAdmin, ocrUpload.single('profileImage'), async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ error: 'No image uploaded' });
+        }
+
+        const processedBuffer = await sharp(req.file.buffer)
+            .grayscale()
+            .normalize()
+            .sharpen()
+            .png()
+            .toBuffer();
+
+        const worker = await createWorker('eng');
+        const { data } = await worker.recognize(processedBuffer);
+        await worker.terminate();
+
+        const fields = extractProfileFieldsFromText(data.text || '');
+
+        return res.json({
+            fields,
+            rawText: data.text || ''
+        });
+    } catch (err) {
+        console.error('OCR extraction error:', err);
+        return res.status(500).json({ error: 'Failed to extract profile info from image' });
+    }
 });
