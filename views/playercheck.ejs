@@ -86,6 +86,7 @@
       border-bottom: 1px solid #e5e7eb;
       text-align: left;
       vertical-align: top;
+      white-space: nowrap;
       font-size: 0.95rem;
     }
 
@@ -100,6 +101,14 @@
 
     tr:hover td {
       background: #f8fafc;
+    }
+
+    .team-row td {
+      background: #e0e7ff;
+      color: #1e3a8a;
+      font-weight: 700;
+      border-top: 2px solid #c7d2fe;
+      border-bottom: 1px solid #c7d2fe;
     }
 
     .empty {
@@ -127,49 +136,59 @@
       <% if (!players || players.length === 0) { %>
         <div class="empty">No player records found.</div>
       <% } else { %>
+        <% const sortedPlayers = [...players].sort((a, b) => {
+             const teamA = (a.teamName || 'Unassigned').toLowerCase();
+             const teamB = (b.teamName || 'Unassigned').toLowerCase();
+             if (teamA !== teamB) return teamA.localeCompare(teamB);
+
+             const nameA = (a.name || '').toLowerCase();
+             const nameB = (b.name || '').toLowerCase();
+             return nameA.localeCompare(nameB);
+           }); %>
+        <% const playersByTeam = sortedPlayers.reduce((groups, player) => {
+             const teamName = player.teamName || 'Unassigned';
+             if (!groups[teamName]) groups[teamName] = [];
+             groups[teamName].push(player);
+             return groups;
+           }, {}); %>
         <table>
           <thead>
             <tr>
-              <th>Player ID</th>
               <th>Name</th>
               <th>Age</th>
+              <th>Date of Birth</th>
               <th>IC</th>
               <th>Phone Number</th>
               <th>Email</th>
               <th>Username</th>
               <th>Account ID</th>
-              <th>Server ID</th>
               <th>Address</th>
-              <th>Address Token</th>
               <th>Postal Code</th>
-              <th>Region</th>
-              <th>Swapped Region</th>
               <th>Country</th>
-              <th>Team</th>
               <th>Role</th>
             </tr>
           </thead>
           <tbody>
-            <% players.forEach(player => { %>
-              <tr>
-                <td><%= player.playerId %></td>
-                <td><%= player.name || '-' %></td>
-                <td><%= player.age || '-' %></td>
-                <td><%= player.ic || '-' %></td>
-                <td><%= player.phoneNumber || '-' %></td>
-                <td><%= player.email || '-' %></td>
-                <td><%= player.username || '-' %></td>
-                <td><%= player.accountId || '-' %></td>
-                <td><%= player.serverId || '-' %></td>
-                <td><%= player.address || '-' %></td>
-                <td><%= player.addressToken || '-' %></td>
-                <td><%= player.postalCode || '-' %></td>
-                <td><%= player.region || '-' %></td>
-                <td><%= player.swappedRegion || '-' %></td>
-                <td><%= player.country || '-' %></td>
-                <td><%= player.teamName || '-' %></td>
-                <td><%= player.role || '-' %></td>
+            <% Object.entries(playersByTeam).forEach(([teamName, teamPlayers]) => { %>
+              <tr class="team-row">
+                <td colspan="12"><%= teamName %></td>
               </tr>
+              <% teamPlayers.forEach(player => { %>
+                <tr>
+                  <td><%= player.name || '-' %></td>
+                  <td><%= player.age || '-' %></td>
+                  <td><%= player.dateOfBirth || player.originalDob || '-' %></td>
+                  <td><%= player.ic || '-' %></td>
+                  <td><%= player.phoneNumber || '-' %></td>
+                  <td><%= player.email || '-' %></td>
+                  <td><%= player.username || '-' %></td>
+                  <td><%= player.accountId || '-' %></td>
+                  <td><%= player.address || '-' %></td>
+                  <td><%= player.postalCode || '-' %></td>
+                  <td><%= player.country || '-' %></td>
+                  <td><%= player.role || '-' %></td>
+                </tr>
+              <% }) %>
             <% }) %>
           </tbody>
         </table>
