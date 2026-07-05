@@ -42,7 +42,8 @@
       margin-bottom: 28px;
     }
 
-    .button-group a {
+    .button-group a,
+    .dropdown-content a {
       display: block;
       padding: 16px 20px;
       text-decoration: none;
@@ -54,7 +55,8 @@
       transition: background 0.2s ease;
     }
 
-    .button-group a:hover {
+    .button-group a:hover,
+    .dropdown-content a:hover {
       background: #1d4ed8;
     }
 
@@ -65,20 +67,81 @@
     .button-group a.logout:hover {
       background: #dc2626;
     }
+
+    .dropdown {
+      background: #f9fafb;
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    .dropdown summary {
+      list-style: none;
+      cursor: pointer;
+      padding: 16px 20px;
+      background: #e5edff;
+      color: #1e3a8a;
+      font-weight: 700;
+      user-select: none;
+      position: relative;
+    }
+
+    .dropdown summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .dropdown summary::after {
+      content: '+';
+      position: absolute;
+      right: 20px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 1.1rem;
+      font-weight: 700;
+    }
+
+    .dropdown[open] summary::after {
+      content: '-';
+    }
+
+    .dropdown-content {
+      padding: 12px;
+      display: grid;
+      gap: 10px;
+      background: #ffffff;
+    }
   </style>
 </head>
 <body>
   <div class="dashboard-card">
     <h1>Admin Dashboard</h1>
-    <p class="subtitle">Use the buttons below to manage teams or sign out.</p>
+    <p class="subtitle">Use the sections below to manage players, teams, and admin access.</p>
     <div class="button-group">
       <a href="/">Home</a>
-      <a href="/players">View Players</a>
-      <a href="/players/add">Add Player</a>
-      <a href="/teams">View Teams</a>
-      <a href="/teams/add">Add Team</a>
-      <a href="/address-vault">Retrieve Original Address from Token</a>
-      <a href="/admins/add" class="admin">Create new admin account</a>
+
+      <details class="dropdown" open>
+        <summary>Player Management</summary>
+        <div class="dropdown-content">
+          <a href="/playerinfo">View Full Player Info</a>
+          <a href="/players/add">Add Player</a>
+        </div>
+      </details>
+
+      <details class="dropdown">
+        <summary>Team Management</summary>
+        <div class="dropdown-content">
+          <a href="/teams">View Teams</a>
+          <a href="/teams/add">Add Team</a>
+        </div>
+      </details>
+
+      <details class="dropdown">
+        <summary>Admin Management</summary>
+        <div class="dropdown-content">
+          <a href="/admins/add" class="admin">Create new admin account</a>
+        </div>
+      </details>
+
       <a href="/logout" class="logout">Logout</a>
     </div>
   </div>
