@@ -1,20 +1,247 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Add Team</title>
+        <title>Add Team</title>
+        <style>
+            body {
+                font-family: Arial, sans-serif;
+                margin: 0;
+                padding: 0;
+                background: #f3f4f6;
+                color: #111827;
+            }
+
+            .navbar {
+                background: #111827;
+                color: #f9fafb;
+                padding: 16px 24px;
+                display: flex;
+                flex-wrap: wrap;
+                align-items: center;
+                justify-content: space-between;
+                gap: 12px;
+            }
+
+            .navbar .brand {
+                font-size: 1.25rem;
+                font-weight: 700;
+            }
+
+            .navbar nav {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 12px;
+                align-items: center;
+            }
+
+            .navbar a {
+                color: #f9fafb;
+                text-decoration: none;
+                padding: 8px 12px;
+                border-radius: 6px;
+                transition: background 0.2s ease;
+            }
+
+            .navbar a:hover {
+                background: rgba(255, 255, 255, 0.12);
+            }
+
+            .navbar a.active {
+                background: #2563eb;
+            }
+
+            .dropdown {
+                position: relative;
+                display: inline-block;
+            }
+
+            .dropdown-btn {
+                color: #f9fafb;
+                padding: 8px 12px;
+                border: none;
+                background-color: transparent;
+                cursor: pointer;
+                border-radius: 6px;
+                transition: background 0.2s ease;
+                font-size: 1rem;
+                font-family: Arial, sans-serif;
+            }
+
+            .dropdown-btn:hover {
+                background: rgba(255, 255, 255, 0.12);
+            }
+
+            .dropdown-content {
+                display: none;
+                position: absolute;
+                background-color: #1f2937;
+                min-width: 200px;
+                box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+                padding: 12px 0;
+                z-index: 1;
+                border-radius: 6px;
+                top: 100%;
+                margin-top: 4px;
+            }
+
+            .dropdown-content a {
+                color: #f9fafb;
+                padding: 12px 16px;
+                text-decoration: none;
+                display: block;
+                transition: background 0.2s ease;
+            }
+
+            .dropdown-content a:hover {
+                background-color: #374151;
+            }
+
+            .dropdown-content.active {
+                display: block;
+            }
+
+            .page-content {
+                max-width: 720px;
+                margin: 40px auto;
+                padding: 0 24px;
+            }
+
+            .form-card {
+                background: #ffffff;
+                border-radius: 14px;
+                box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+                padding: 28px;
+            }
+
+            .page-title {
+                margin-top: 0;
+                margin-bottom: 24px;
+                font-size: 2rem;
+            }
+
+            .form-grid {
+                display: grid;
+                gap: 16px;
+            }
+
+            label {
+                display: block;
+                margin-bottom: 8px;
+                color: #475569;
+                font-size: 0.95rem;
+            }
+
+            input {
+                width: 100%;
+                padding: 12px 14px;
+                border: 1px solid #d1d5db;
+                border-radius: 10px;
+                font-size: 1rem;
+                background: #f8fafc;
+                color: #111827;
+                box-sizing: border-box;
+            }
+
+            .button-row {
+                margin-top: 24px;
+                display: flex;
+                flex-wrap: wrap;
+                gap: 12px;
+                justify-content: flex-end;
+            }
+
+            .button-row button,
+            .button-row a {
+                padding: 12px 20px;
+                border-radius: 10px;
+                font-weight: 600;
+                border: none;
+                cursor: pointer;
+                text-decoration: none;
+                color: #ffffff;
+                transition: background 0.2s ease;
+            }
+
+            .button-row button {
+                background: #2563eb;
+            }
+
+            .button-row a {
+                background: #64748b;
+            }
+
+            .button-row button:hover {
+                background: #1d4ed8;
+            }
+
+            .button-row a:hover {
+                background: #475569;
+            }
+        </style>
 </head>
 <body>
-    <h1>Add New Team</h1>
+    <header class="navbar">
+        <div class="brand">MPL Singapore</div>
+        <nav>
+            <a href="/">Home</a>
+            <a href="/players">Players</a>
 
-    <p>
-        <a href="/">Back</a>
-    </p>
+            <div class="dropdown">
+                <button class="dropdown-btn">Dashboards ▼</button>
+                <div class="dropdown-content">
+                    <a href="/playerpage">Player Dashboard</a>
+                    <a href="/employeepage">Employee Dashboard</a>
+                    <a href="/adminpage">Admin Dashboard</a>
+                </div>
+            </div>
 
-    <form action="/teams/add" method="POST">
-        <label for="teamName">Team Name:</label><br>
-        <input type="text" id="teamName" name="teamName" required><br><br>
+            <a href="/loginlist">Login Options</a>
+        </nav>
+    </header>
 
-        <button type="submit">Create Team</button>
-    </form>
+    <main class="page-content">
+        <section class="form-card">
+            <h1 class="page-title">Add New Team</h1>
+
+            <form action="/teams/add" method="POST">
+                <div class="form-grid">
+                    <div>
+                        <label for="teamName">Team Name</label>
+                        <input type="text" id="teamName" name="teamName" required>
+                    </div>
+                </div>
+
+                <div class="button-row">
+                    <a href="/">Back</a>
+                    <button type="submit">Create Team</button>
+                </div>
+            </form>
+        </section>
+    </main>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const dropdownBtn = document.querySelector('.dropdown-btn');
+            const dropdownContent = document.querySelector('.dropdown-content');
+
+            dropdownBtn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                dropdownContent.classList.toggle('active');
+            });
+
+            const dropdownLinks = document.querySelectorAll('.dropdown-content a');
+            dropdownLinks.forEach(link => {
+                link.addEventListener('click', function() {
+                    dropdownContent.classList.remove('active');
+                });
+            });
+
+            document.addEventListener('click', function(e) {
+                if (!e.target.closest('.dropdown')) {
+                    dropdownContent.classList.remove('active');
+                }
+            });
+        });
+    </script>
 </body>
 </html>
