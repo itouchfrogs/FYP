@@ -1,34 +1,301 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Teams</title>
+        <title>Teams</title>
+        <style>
+            body {
+                font-family: Arial, sans-serif;
+                margin: 0;
+                padding: 0;
+                background: #f3f4f6;
+                color: #111827;
+            }
+
+            .navbar {
+                background: #111827;
+                color: #f9fafb;
+                padding: 16px 24px;
+                display: flex;
+                flex-wrap: wrap;
+                align-items: center;
+                justify-content: space-between;
+                gap: 12px;
+            }
+
+            .navbar .brand {
+                font-size: 1.25rem;
+                font-weight: 700;
+            }
+
+            .navbar nav {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 12px;
+                align-items: center;
+            }
+
+            .navbar a {
+                color: #f9fafb;
+                text-decoration: none;
+                padding: 8px 12px;
+                border-radius: 6px;
+                transition: background 0.2s ease;
+            }
+
+            .navbar a:hover {
+                background: rgba(255, 255, 255, 0.12);
+            }
+
+            .navbar a.active {
+                background: #2563eb;
+            }
+
+            .dropdown {
+                position: relative;
+                display: inline-block;
+            }
+
+            .dropdown-btn {
+                color: #f9fafb;
+                padding: 8px 12px;
+                border: none;
+                background-color: transparent;
+                cursor: pointer;
+                border-radius: 6px;
+                transition: background 0.2s ease;
+                font-size: 1rem;
+                font-family: Arial, sans-serif;
+            }
+
+            .dropdown-btn:hover {
+                background: rgba(255, 255, 255, 0.12);
+            }
+
+            .dropdown-content {
+                display: none;
+                position: absolute;
+                background-color: #1f2937;
+                min-width: 200px;
+                box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+                padding: 12px 0;
+                z-index: 1;
+                border-radius: 6px;
+                top: 100%;
+                margin-top: 4px;
+            }
+
+            .dropdown-content a {
+                color: #f9fafb;
+                padding: 12px 16px;
+                text-decoration: none;
+                display: block;
+                transition: background 0.2s ease;
+            }
+
+            .dropdown-content a:hover {
+                background-color: #374151;
+            }
+
+            .dropdown-content.active {
+                display: block;
+            }
+
+            .page-content {
+                max-width: 900px;
+                margin: 40px auto;
+                padding: 0 24px;
+            }
+
+            .page-header {
+                display: flex;
+                flex-wrap: wrap;
+                align-items: center;
+                justify-content: space-between;
+                gap: 12px;
+                margin-bottom: 16px;
+            }
+
+            .page-title {
+                margin: 0;
+                font-size: 2rem;
+            }
+
+            .header-actions {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 10px;
+            }
+
+            .header-actions a {
+                text-decoration: none;
+                color: #ffffff;
+                background: #2563eb;
+                padding: 10px 14px;
+                border-radius: 8px;
+                font-weight: 600;
+                transition: background 0.2s ease;
+            }
+
+            .header-actions a:hover {
+                background: #1d4ed8;
+            }
+
+            .team-list {
+                background: #ffffff;
+                border-radius: 14px;
+                box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+                padding: 24px;
+                border: 2px solid #d1d5db;
+            }
+
+            .team-table {
+                width: 100%;
+                border-collapse: separate;
+                border-spacing: 0 10px;
+            }
+
+            .team-table td {
+                text-align: left;
+                padding: 12px;
+            }
+
+            .team-table td.actions-cell {
+                width: 1%;
+                white-space: nowrap;
+                text-align: right;
+            }
+
+            .team-table td {
+                color: #374151;
+                background: #f8fafc;
+                border-top: 1px solid #dbe3ef;
+                border-bottom: 1px solid #dbe3ef;
+                font-weight: 600;
+            }
+
+            .team-table tbody tr:nth-child(even) td {
+                background: #f1f5f9;
+            }
+
+            .team-table tbody tr td:first-child {
+                border-left: 1px solid #dbe3ef;
+                border-top-left-radius: 8px;
+                border-bottom-left-radius: 8px;
+            }
+
+            .team-table tbody tr td:last-child {
+                border-right: 1px solid #dbe3ef;
+                border-top-right-radius: 8px;
+                border-bottom-right-radius: 8px;
+            }
+
+            .team-table tbody tr:hover td {
+                background: #eaf2ff;
+            }
+
+            .delete-form {
+                margin: 0;
+            }
+
+            .delete-btn {
+                border: none;
+                border-radius: 8px;
+                background: #ef4444;
+                color: #ffffff;
+                font-weight: 600;
+                padding: 8px 12px;
+                cursor: pointer;
+                transition: background 0.2s ease;
+            }
+
+            .delete-btn:hover {
+                background: #dc2626;
+            }
+
+            .no-teams {
+                text-align: center;
+                color: #6b7280;
+                padding: 28px 0;
+                font-size: 1.05rem;
+            }
+        </style>
 </head>
 <body>
-    <h1>All Teams</h1>
+    <header class="navbar">
+        <div class="brand">MPL Singapore</div>
+        <nav>
+            <a href="/">Home</a>
+            <a href="/players">Players</a>
 
-    <p>
-        <a href="/">Back</a> |
-        <a href="/players/add">Add Player</a> |
-        <a href="/teams/add">Add New Team</a> |
-    </p>
+            <div class="dropdown">
+                <button class="dropdown-btn">Dashboards ▼</button>
+                <div class="dropdown-content">
+                    <a href="/playerpage">Player Dashboard</a>
+                    <a href="/employeepage">Employee Dashboard</a>
+                    <a href="/adminpage">Admin Dashboard</a>
+                </div>
+            </div>
 
-    <% if (teams.length === 0) { %>
-        <p>No teams found.</p>
-    <% } else { %>
-        <table>
-            <thead>
-                <tr>
-                    <th>Team Name</th>
-                </tr>
-            </thead>
-            <tbody>
-                <% teams.forEach(team => { %>
-                    <tr>
-                        <td><%= team.teamName %></td>
-                    </tr>
-                <% }) %>
-            </tbody>
-        </table>
-    <% } %>
+            <a href="/loginlist">Login Options</a>
+        </nav>
+    </header>
+
+    <main class="page-content">
+        <div class="page-header">
+            <h1 class="page-title">All Teams</h1>
+            <div class="header-actions">
+                <a href="/teams/add">Add New Team</a>
+                <a href="/players/add">Add Player</a>
+            </div>
+        </div>
+
+        <section class="team-list">
+            <% if (!teams || teams.length === 0) { %>
+                <p class="no-teams">No teams found.</p>
+            <% } else { %>
+                <table class="team-table">
+                    <tbody>
+                        <% teams.forEach(team => { %>
+                            <tr>
+                                <td><%= team.teamName %></td>
+                                <td class="actions-cell">
+                                    <form class="delete-form" action="/teams/delete" method="POST" onsubmit="return confirm('Delete this team?');">
+                                        <input type="hidden" name="teamId" value="<%= team.teamId || '' %>">
+                                        <input type="hidden" name="teamName" value="<%= team.teamName %>">
+                                        <button type="submit" class="delete-btn">Delete</button>
+                                    </form>
+                                </td>
+                            </tr>
+                        <% }) %>
+                    </tbody>
+                </table>
+            <% } %>
+        </section>
+    </main>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const dropdownBtn = document.querySelector('.dropdown-btn');
+            const dropdownContent = document.querySelector('.dropdown-content');
+
+            dropdownBtn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                dropdownContent.classList.toggle('active');
+            });
+
+            const dropdownLinks = document.querySelectorAll('.dropdown-content a');
+            dropdownLinks.forEach(link => {
+                link.addEventListener('click', function() {
+                    dropdownContent.classList.remove('active');
+                });
+            });
+
+            document.addEventListener('click', function(e) {
+                if (!e.target.closest('.dropdown')) {
+                    dropdownContent.classList.remove('active');
+                }
+            });
+        });
+    </script>
 </body>
 </html>
