@@ -6,6 +6,8 @@ const sharp = require('sharp');
 const { createWorker } = require('tesseract.js');
 const session = require('express-session');
 const bcrypt = require('bcrypt');
+const fs = require('fs');
+const https = require('https');
 
 const app = express();
 
@@ -110,6 +112,71 @@ async function ensurePlayerSchema() {
     }
 }
 
+async function ensureConsentSchema() {
+    try {
+        await pool.execute(`
+            CREATE TABLE IF NOT EXISTS consent_records (
+                consentId INT AUTO_INCREMENT PRIMARY KEY,
+                subjectIdentifier VARCHAR(255) NULL,
+                fullName VARCHAR(255) NULL,
+                contactEmail VARCHAR(255) NULL,
+                age INT NULL,
+                parentalPermissionGiven TINYINT(1) NOT NULL DEFAULT 0,
+                parentalFullName VARCHAR(255) NULL,
+                parentalPhone VARCHAR(50) NULL,
+                purposes TEXT NOT NULL,
+                consentVersion VARCHAR(50) NOT NULL,
+                consentedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+
+        const [subjectTypeColumns] = await pool.execute("SHOW COLUMNS FROM consent_records LIKE 'subjectType'");
+        if (subjectTypeColumns.length > 0) {
+            await pool.execute('ALTER TABLE consent_records DROP COLUMN subjectType');
+        }
+
+        const [ipColumns] = await pool.execute("SHOW COLUMNS FROM consent_records LIKE 'ipAddress'");
+        if (ipColumns.length > 0) {
+            await pool.execute('ALTER TABLE consent_records DROP COLUMN ipAddress');
+        }
+
+        const [userAgentColumns] = await pool.execute("SHOW COLUMNS FROM consent_records LIKE 'userAgent'");
+        if (userAgentColumns.length > 0) {
+            await pool.execute('ALTER TABLE consent_records DROP COLUMN userAgent');
+        }
+
+        const [ageColumns] = await pool.execute("SHOW COLUMNS FROM consent_records LIKE 'age'");
+        const [legacyAgeColumns] = await pool.execute("SHOW COLUMNS FROM consent_records LIKE 'ageYears'");
+
+        if (ageColumns.length === 0) {
+            await pool.execute('ALTER TABLE consent_records ADD COLUMN age INT NULL AFTER contactEmail');
+        }
+
+        if (legacyAgeColumns.length > 0) {
+            await pool.execute('UPDATE consent_records SET age = ageYears WHERE age IS NULL AND ageYears IS NOT NULL');
+            await pool.execute('ALTER TABLE consent_records DROP COLUMN ageYears');
+        }
+
+        const [parentalPermissionColumns] = await pool.execute("SHOW COLUMNS FROM consent_records LIKE 'parentalPermissionGiven'");
+        if (parentalPermissionColumns.length === 0) {
+            await pool.execute('ALTER TABLE consent_records ADD COLUMN parentalPermissionGiven TINYINT(1) NOT NULL DEFAULT 0 AFTER age');
+        }
+
+        const [parentalNameColumns] = await pool.execute("SHOW COLUMNS FROM consent_records LIKE 'parentalFullName'");
+        if (parentalNameColumns.length === 0) {
+            await pool.execute('ALTER TABLE consent_records ADD COLUMN parentalFullName VARCHAR(255) NULL AFTER parentalPermissionGiven');
+        }
+
+        const [parentalPhoneColumns] = await pool.execute("SHOW COLUMNS FROM consent_records LIKE 'parentalPhone'");
+        if (parentalPhoneColumns.length === 0) {
+            await pool.execute('ALTER TABLE consent_records ADD COLUMN parentalPhone VARCHAR(50) NULL AFTER parentalFullName');
+        }
+    } catch (err) {
+        console.error('Schema check/update failed for consent_records table:', err);
+        throw err;
+    }
+}
+
 // =========================
 // SETTINGS
 // =========================
@@ -120,6 +187,20 @@ app.set('views', path.join(__dirname, 'views'));
 app.use(express.static(path.join(__dirname, 'public')));
 
 app.use(express.urlencoded({ extended: false }));
+
+const CONSENT_VERSION = 'PDPC-CONSENT-v1';
+
+function getSafeReturnTo(value) {
+    if (!value || typeof value !== 'string') {
+        return '/';
+    }
+
+    if (value.startsWith('/') && !value.startsWith('//')) {
+        return value;
+    }
+
+    return '/';
+}
 
 function laplaceNoise(scale) {
     const u = Math.random() - 0.5;
@@ -195,12 +276,12 @@ function generateAddressToken(length = 16) {
 } 
 
 // Saves the real address in the vault table and returns the token.
-async function saveAddressToVault(realAddress) {
+async function saveAddressToVault(realAddress, db = pool) {
     let token = generateAddressToken(16);
 
     while (true) {
         try {
-            await pool.execute(
+            await db.execute(
                 `INSERT INTO address_vault (token, real_address) VALUES (?, ?)`,
                 [token, realAddress]
             );
@@ -215,6 +296,88 @@ async function saveAddressToVault(realAddress) {
     }
 }
 
+async function rebuildSwappedRegions(db) {
+    // [SWAP-1] Load current real regions for all players.
+    const [players] = await db.execute(`
+        SELECT playerId, region
+        FROM player
+        ORDER BY playerId ASC
+    `);
+
+    if (players.length === 0) {
+        return { isAvailable: false, reason: 'no-data' };
+    }
+
+    const normalizedPlayers = players.map((player) => ({
+        playerId: player.playerId,
+        region: typeof player.region === 'string' ? player.region.trim() : player.region
+    }));
+
+    // [SWAP-2] Build a candidate set containing only players with non-empty regions.
+    const playersWithRegion = normalizedPlayers.filter((player) => player.region);
+    const swappedRegionById = new Map();
+
+    if (playersWithRegion.length > 0) {
+        // [SWAP-3] Count each real region to check if a valid swapped mapping is possible.
+        const regionCounts = new Map();
+        for (const player of playersWithRegion) {
+            regionCounts.set(player.region, (regionCounts.get(player.region) || 0) + 1);
+        }
+
+        // [SWAP-4] If one region dominates too much, we cannot keep every swapped value different.
+        const maxRegionCount = Math.max(...regionCounts.values());
+        if (maxRegionCount > Math.floor(playersWithRegion.length / 2)) {
+            // [SWAP-5] Mark swapped regions unavailable (null) to avoid inaccurate statistics.
+            for (const player of normalizedPlayers) {
+                await db.execute(
+                    'UPDATE player SET swappedRegion = ? WHERE playerId = ?',
+                    [null, player.playerId]
+                );
+            }
+
+            return {
+                isAvailable: false,
+                reason: 'insufficient-balance'
+            };
+        }
+
+        // [SWAP-6] Sort players deterministically before shifted assignment.
+        const sortedPlayers = [...playersWithRegion].sort((left, right) => {
+            const regionCompare = left.region.localeCompare(right.region);
+            if (regionCompare !== 0) {
+                return regionCompare;
+            }
+
+            return left.playerId - right.playerId;
+        });
+
+        // [SWAP-7] Shift by the dominant-region count to create a count-preserving derangement.
+        const shift = maxRegionCount;
+        for (let index = 0; index < sortedPlayers.length; index += 1) {
+            const currentPlayer = sortedPlayers[index];
+            const shiftedPlayer = sortedPlayers[(index + shift) % sortedPlayers.length];
+            swappedRegionById.set(currentPlayer.playerId, shiftedPlayer.region);
+        }
+    }
+
+    // [SWAP-8] Persist swappedRegion for each player (or null when unavailable).
+    for (const player of normalizedPlayers) {
+        const swappedRegionValue = swappedRegionById.has(player.playerId)
+            ? swappedRegionById.get(player.playerId)
+            : null;
+
+        await db.execute(
+            'UPDATE player SET swappedRegion = ? WHERE playerId = ?',
+            [swappedRegionValue, player.playerId]
+        );
+    }
+
+    return {
+        isAvailable: playersWithRegion.length > 0,
+        reason: playersWithRegion.length > 0 ? null : 'no-region-data'
+    };
+}
+
 // Session middleware
 app.use(session({
     secret: 'secret',
@@ -222,6 +385,60 @@ app.use(session({
     saveUninitialized: true,
     cookie: { maxAge: 1000 * 60 * 60 * 24 * 7 } // 1 week
 }));
+
+function getSessionRole(sessionObj) {
+    if (!sessionObj) {
+        return null;
+    }
+
+    if (sessionObj.role === 'admin' || sessionObj.role === 'employee' || sessionObj.role === 'player') {
+        return sessionObj.role;
+    }
+
+    if (sessionObj.playerId) {
+        return 'player';
+    }
+
+    return null;
+}
+
+function getDashboardPathByRole(role) {
+    if (role === 'admin') {
+        return '/adminpage';
+    }
+
+    if (role === 'employee') {
+        return '/employeepage';
+    }
+
+    if (role === 'player') {
+        return '/playerpage';
+    }
+
+    return null;
+}
+
+function redirectToRoleDashboard(req, res) {
+    const role = getSessionRole(req.session);
+    const dashboardPath = getDashboardPathByRole(role);
+
+    if (dashboardPath) {
+        return res.redirect(dashboardPath);
+    }
+
+    return null;
+}
+
+app.use((req, res, next) => {
+    const currentRole = getSessionRole(req.session);
+    const dashboardPath = getDashboardPathByRole(currentRole);
+
+    res.locals.currentRole = currentRole;
+    res.locals.isLoggedIn = Boolean(dashboardPath);
+    res.locals.dashboardPath = dashboardPath;
+
+    next();
+});
 
 function requireAdmin(req, res, next) {
     if (req.session && req.session.role === 'admin') {
@@ -231,10 +448,19 @@ function requireAdmin(req, res, next) {
 }
 
 function requireEmployee(req, res, next) {
-    if (req.session && (req.session.role === 'employee' || req.session.role === 'admin')) {
+    if (req.session && req.session.role === 'employee') {
         return next();
     }
     return res.redirect('/employeelogin');
+}
+
+function requireConsent(req, res, next) {
+    if (req.session && req.session.pdpcConsentAccepted === true) {
+        return next();
+    }
+
+    const returnTo = encodeURIComponent(req.originalUrl || '/');
+    return res.redirect(`/consent?returnTo=${returnTo}`);
 }
 
 // =========================
@@ -374,7 +600,69 @@ app.get("/", async (req, res) => {
             ORDER BY teamName ASC
         `);
 
-        res.render("home", { teams });
+        const [regionRows] = await pool.execute(`
+            SELECT region, swappedRegion
+            FROM player
+            WHERE (region IS NOT NULL AND region != '')
+               OR (swappedRegion IS NOT NULL AND swappedRegion != '')
+        `);
+
+        // [STAT-1] Count real-region and swapped-region totals independently.
+        const realRegionCounts = new Map();
+        const swappedRegionCounts = new Map();
+
+        for (const row of regionRows) {
+            const realRegion = typeof row.region === 'string' ? row.region.trim() : '';
+            const swappedRegion = typeof row.swappedRegion === 'string' ? row.swappedRegion.trim() : '';
+
+            if (realRegion) {
+                realRegionCounts.set(realRegion, (realRegionCounts.get(realRegion) || 0) + 1);
+            }
+
+            if (swappedRegion) {
+                swappedRegionCounts.set(swappedRegion, (swappedRegionCounts.get(swappedRegion) || 0) + 1);
+            }
+        }
+
+        const allRegions = Array.from(new Set([
+            ...realRegionCounts.keys(),
+            ...swappedRegionCounts.keys()
+        ])).sort((left, right) => left.localeCompare(right));
+
+        // [STAT-2] Merge both maps into one view model for graph rendering.
+        const regionStats = allRegions.map((regionName) => ({
+            region: regionName,
+            realCount: realRegionCounts.get(regionName) || 0,
+            swappedCount: swappedRegionCounts.get(regionName) || 0
+        }));
+
+        // [STAT-3] Graph is shown only when swapped totals remain true to real totals.
+        const regionStatsVerified = regionStats.every((entry) => entry.realCount === entry.swappedCount);
+        const regionStatsAvailable = regionStatsVerified
+            && regionStats.length > 0
+            && regionStats.every((entry) => entry.swappedCount > 0);
+        const regionStatsMessage = regionStatsAvailable
+            ? 'Using swapped-region totals verified against real-region totals.'
+            : 'Information not available yet. Add or remove more player data until swapped-region statistics can match the real region totals accurately.';
+
+        const hasActiveSession = Boolean(
+            req.session
+            && (
+                req.session.playerId
+                || req.session.employeeId
+                || req.session.adminId
+                || req.session.role
+            )
+        );
+
+        res.render("home", {
+            teams,
+            showConsentCta: !hasActiveSession,
+            regionStats,
+            regionStatsVerified,
+            regionStatsAvailable,
+            regionStatsMessage
+        });
     } catch (err) {
         console.error('Error loading home page teams:', err);
         res.status(500).send('Error loading home page');
@@ -387,6 +675,10 @@ app.get("/", async (req, res) => {
 // =========================
 
 app.get('/login', (req, res) => {
+    if (redirectToRoleDashboard(req, res)) {
+        return;
+    }
+
     res.render('login');
 });
 
@@ -425,11 +717,15 @@ app.post('/login', async (req, res) => {
         }
 
         req.session.adminId = admin.adminId;
+        delete req.session.employeeId;
+        delete req.session.playerId;
+        delete req.session.playerUsername;
+        delete req.session.playerEmail;
         req.session.role = admin.role || 'admin';
 
         console.log('DEBUG LOGIN: Session set - adminId=', req.session.adminId, 'role=', req.session.role);
 
-        res.redirect(admin.role === 'employee' ? '/employee' : '/adminpage');
+        res.redirect(admin.role === 'employee' ? '/employeepage' : '/adminpage');
     } catch (err) {
         console.error(err);
         res.status(500).send('Login error');
@@ -437,15 +733,196 @@ app.post('/login', async (req, res) => {
 });
 
 app.get('/playerlogin', (req, res) => {
+    if (redirectToRoleDashboard(req, res)) {
+        return;
+    }
+
     res.render('playerlogin');
 });
 
 app.get('/loginlist', (req, res) => {
+    if (redirectToRoleDashboard(req, res)) {
+        return;
+    }
+
     res.render('loginlist');
 });
 
+app.get('/consent', (req, res) => {
+    const returnTo = getSafeReturnTo(req.query.returnTo);
+    res.render('consent', {
+        returnTo,
+        consentVersion: CONSENT_VERSION,
+        consentError: null,
+        consentForm: {
+            fullName: '',
+            contactEmail: '',
+            age: '',
+            parentalPermission: false,
+            parentalFullName: '',
+            parentalPhone: '',
+            consentPurpose: [],
+            acknowledgeNotice: false,
+            consentCollectionUse: false,
+            consentDisclosure: false,
+            confirmAge: false
+        }
+    });
+});
+
+app.post('/consent', async (req, res) => {
+    const returnTo = getSafeReturnTo(req.body.returnTo || req.query.returnTo);
+
+    try {
+        const {
+            fullName,
+            contactEmail,
+            age,
+            parentalPermission,
+            parentalFullName,
+            parentalPhone,
+            acknowledgeNotice,
+            consentCollectionUse,
+            consentDisclosure,
+            confirmAge,
+            consentPurpose
+        } = req.body;
+
+        const selectedPurposes = Array.isArray(consentPurpose)
+            ? consentPurpose.filter(Boolean)
+            : consentPurpose
+                ? [consentPurpose]
+                : [];
+
+        const consentForm = {
+            fullName: String(fullName || ''),
+            contactEmail: String(contactEmail || ''),
+            age: String(age || ''),
+            parentalPermission: parentalPermission === 'yes',
+            parentalFullName: String(parentalFullName || ''),
+            parentalPhone: String(parentalPhone || ''),
+            consentPurpose: selectedPurposes,
+            acknowledgeNotice: acknowledgeNotice === 'yes',
+            consentCollectionUse: consentCollectionUse === 'yes',
+            consentDisclosure: consentDisclosure === 'yes',
+            confirmAge: confirmAge === 'yes'
+        };
+
+        const trimmedFullName = consentForm.fullName.trim();
+        const trimmedContactEmail = consentForm.contactEmail.trim();
+        consentForm.fullName = trimmedFullName;
+        consentForm.contactEmail = trimmedContactEmail;
+
+        const hasRequiredConsent =
+            acknowledgeNotice === 'yes'
+            && consentCollectionUse === 'yes'
+            && consentDisclosure === 'yes'
+            && confirmAge === 'yes'
+            && selectedPurposes.length > 0;
+
+        const parsedAge = Number.parseInt(age, 10);
+        const isAgeValid = Number.isInteger(parsedAge) && parsedAge >= 0;
+
+        if (!isAgeValid) {
+            return res.status(400).render('consent', {
+                returnTo,
+                consentVersion: CONSENT_VERSION,
+                consentError: 'Please provide a valid age.',
+                consentForm
+            });
+        }
+
+        if (!trimmedFullName || !trimmedContactEmail) {
+            return res.status(400).render('consent', {
+                returnTo,
+                consentVersion: CONSENT_VERSION,
+                consentError: 'Full name and contact email are required.',
+                consentForm
+            });
+        }
+
+        const isMinor = parsedAge < 18;
+        const hasParentalPermission = parentalPermission === 'yes';
+        const parentName = String(parentalFullName || '').trim();
+        const parentPhone = String(parentalPhone || '').trim();
+
+        if (!hasRequiredConsent) {
+            return res.status(400).render('consent', {
+                returnTo,
+                consentVersion: CONSENT_VERSION,
+                consentError: 'You must acknowledge all required consent checkboxes before continuing.',
+                consentForm
+            });
+        }
+
+        if (isMinor && (!hasParentalPermission || !parentName || !parentPhone)) {
+            return res.status(400).render('consent', {
+                returnTo,
+                consentVersion: CONSENT_VERSION,
+                consentError: 'For users under 18, parental permission, parent full name, and parent phone number are required.',
+                consentForm
+            });
+        }
+
+        const subjectIdentifier = req.session?.playerId
+            ? `player:${req.session.playerId}`
+            : req.session?.adminId
+                ? `admin:${req.session.adminId}`
+                : req.session?.employeeId
+                    ? `employee:${req.session.employeeId}`
+                    : trimmedContactEmail;
+
+        await pool.execute(
+            `INSERT INTO consent_records
+                (subjectIdentifier, fullName, contactEmail, age, parentalPermissionGiven, parentalFullName, parentalPhone, purposes, consentVersion)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+                subjectIdentifier,
+                trimmedFullName,
+                trimmedContactEmail,
+                parsedAge,
+                isMinor ? 1 : 0,
+                isMinor ? parentName : null,
+                isMinor ? encrypt(parentPhone) : null,
+                JSON.stringify(selectedPurposes),
+                CONSENT_VERSION
+            ]
+        );
+
+        req.session.pdpcConsentAccepted = true;
+        req.session.pdpcConsentAt = new Date().toISOString();
+        req.session.pdpcConsentVersion = CONSENT_VERSION;
+
+        return res.redirect(returnTo);
+    } catch (err) {
+        console.error('Consent submission error:', err);
+        return res.status(500).render('consent', {
+            returnTo,
+            consentVersion: CONSENT_VERSION,
+            consentError: 'Failed to record consent. Please try again.',
+            consentForm: {
+                fullName: String(req.body?.fullName || ''),
+                contactEmail: String(req.body?.contactEmail || ''),
+                age: String(req.body?.age || ''),
+                parentalPermission: req.body?.parentalPermission === 'yes',
+                parentalFullName: String(req.body?.parentalFullName || ''),
+                parentalPhone: String(req.body?.parentalPhone || ''),
+                consentPurpose: Array.isArray(req.body?.consentPurpose)
+                    ? req.body.consentPurpose
+                    : req.body?.consentPurpose
+                        ? [req.body.consentPurpose]
+                        : [],
+                acknowledgeNotice: req.body?.acknowledgeNotice === 'yes',
+                consentCollectionUse: req.body?.consentCollectionUse === 'yes',
+                consentDisclosure: req.body?.consentDisclosure === 'yes',
+                confirmAge: req.body?.confirmAge === 'yes'
+            }
+        });
+    }
+});
+
 function requirePlayer(req, res, next) {
-    if (req.session && req.session.playerId) {
+    if (req.session && req.session.role === 'player' && req.session.playerId) {
         return next();
     }
     return res.redirect('/playerlogin');
@@ -500,22 +977,36 @@ app.get('/playerprofile/edit', requirePlayer, async (req, res) => {
 });
 
 app.post('/playerprofile/edit', requirePlayer, async (req, res) => {
+    const connection = await pool.getConnection();
+
     try {
         const playerId = req.session.playerId;
         const { name, age, dateOfBirth, email, username, teamName, role, region, postalCode, country } = req.body;
 
-        await pool.execute(
+        await connection.beginTransaction();
+
+        await connection.execute(
             `UPDATE player SET name = ?, age = ?, dateOfBirth = ?, email = ?, username = ?, teamName = ?, role = ?, region = ?, postalCode = ?, country = ? WHERE playerId = ?`,
             [name, age, dateOfBirth, email, username, teamName, role, region, postalCode, country, playerId]
         );
+
+        await rebuildSwappedRegions(connection);
+
+        await connection.commit();
 
         req.session.playerUsername = username;
         req.session.playerEmail = email;
 
         res.redirect('/playerprofile');
     } catch (err) {
+        await connection.rollback();
         console.error(err);
+        if (err.code === 'SWAPPED_REGION_DERANGEMENT_IMPOSSIBLE') {
+            return res.status(400).send(err.message);
+        }
         res.status(500).send('Error updating player profile');
+    } finally {
+        connection.release();
     }
 });
 
@@ -528,6 +1019,10 @@ app.get('/adminpage', requireAdmin, (req, res) => {
 });
 
 app.get('/employeelogin', (req, res) => {
+    if (redirectToRoleDashboard(req, res)) {
+        return;
+    }
+
     res.render('employeelogin', { error: null });
 });
 
@@ -564,6 +1059,10 @@ app.post('/employeelogin', async (req, res) => {
         }
 
         req.session.employeeId = user.employeeId;
+        delete req.session.adminId;
+        delete req.session.playerId;
+        delete req.session.playerUsername;
+        delete req.session.playerEmail;
         req.session.role = 'employee';
 
         res.redirect('/employeepage');
@@ -599,8 +1098,11 @@ app.post('/playerlogin', async (req, res) => {
         }
 
         req.session.playerId = player.playerId;
+        delete req.session.adminId;
+        delete req.session.employeeId;
         req.session.playerUsername = player.username;
         req.session.playerEmail = player.email;
+        req.session.role = 'player';
 
         res.redirect('/playerpage');
     } catch (err) {
@@ -803,8 +1305,10 @@ app.get("/players/add", requireAdmin, async (req, res) => {
 // =========================
 
 app.post("/players/add", requireAdmin, async (req, res) => {
+    const connection = await pool.getConnection();
 
     try {
+        await connection.beginTransaction();
 
         // normalize/move region fields if provided under different names
         moveFieldToEnd(req.body, 'region');
@@ -834,35 +1338,13 @@ app.post("/players/add", requireAdmin, async (req, res) => {
         const originalServerId = serverId;
         const noisedServerId = dpServerId(serverId);
         const originalDob = dateOfBirth;
-        const dbDob = "2001-09-11";
-        const addressToken = await saveAddressToVault(address);
+        const dbDob = "1967-06-07";
+        const addressToken = await saveAddressToVault(address, connection);
         const hashedPassword = await bcrypt.hash(password, 10);
         const encryptedIC = encrypt(ic);
         const encryptedPhone = encrypt(phoneNumber);
 
-        let swappedRegionValue = regionValue;
-
-        const [existingPlayers] = await pool.execute(`
-            SELECT playerId, region
-            FROM player
-            WHERE region IS NOT NULL AND region != ''
-            ORDER BY RAND()
-            LIMIT 1
-        `);
-
-        if (existingPlayers.length > 0) {
-            const existing = existingPlayers[0];
-            if (existing.region && existing.region !== '') {
-                swappedRegionValue = existing.region;
-                await pool.execute(`
-                    UPDATE player
-                    SET region = ?
-                    WHERE playerId = ?
-                `, [regionValue, existing.playerId]);
-            }
-        }
-
-        await pool.execute(`
+        await connection.execute(`
 
             INSERT INTO player (
                 ic,
@@ -904,7 +1386,7 @@ app.post("/players/add", requireAdmin, async (req, res) => {
             addressToken,
             postalCode,
             regionValue,
-            swappedRegionValue,
+            regionValue,
             country,
             teamName,
             role,
@@ -912,13 +1394,25 @@ app.post("/players/add", requireAdmin, async (req, res) => {
 
         ]);
 
+        await rebuildSwappedRegions(connection);
+
+        await connection.commit();
+
         res.redirect("/players");
 
     } catch (err) {
+        await connection.rollback();
 
         console.error(err);
 
+        if (err.code === 'SWAPPED_REGION_DERANGEMENT_IMPOSSIBLE') {
+            return res.status(400).send(err.message);
+        }
+
         res.status(500).send("Error adding player");
+
+    } finally {
+        connection.release();
 
     }
 
@@ -961,11 +1455,16 @@ app.post('/players/delete/:playerId', async (req, res) => {
             [playerId]
         );
 
+        await rebuildSwappedRegions(connection);
+
         await connection.commit();
         res.redirect('/players');
     } catch (err) {
         await connection.rollback();
         console.error(err);
+        if (err.code === 'SWAPPED_REGION_DERANGEMENT_IMPOSSIBLE') {
+            return res.status(400).send(err.message);
+        }
         res.status(500).send('Error deleting player');
     } finally {
         connection.release();
@@ -1128,6 +1627,69 @@ app.get('/admins', requireAdmin, async (req, res) => {
     }
 });
 
+app.get('/consent-records', requireAdmin, async (req, res) => {
+    try {
+        const [rows] = await pool.execute(`
+            SELECT
+                consentId,
+                subjectIdentifier,
+                fullName,
+                contactEmail,
+                age,
+                parentalPermissionGiven,
+                parentalFullName,
+                parentalPhone,
+                purposes,
+                consentVersion,
+                consentedAt
+            FROM consent_records
+            ORDER BY consentedAt DESC
+        `);
+
+        const consentRecords = rows.map((record) => {
+            let parsedPurposes = [];
+
+            if (record.purposes) {
+                try {
+                    const parsed = JSON.parse(record.purposes);
+                    parsedPurposes = Array.isArray(parsed) ? parsed : [String(parsed)];
+                } catch (err) {
+                    parsedPurposes = [String(record.purposes)];
+                }
+            }
+
+            return {
+                ...record,
+                parentalPhone: decrypt(record.parentalPhone),
+                parsedPurposes
+            };
+        });
+
+        return res.render('consentrecords', {
+            consentRecords
+        });
+    } catch (err) {
+        console.error('Error loading consent records:', err);
+        return res.status(500).send('Error loading consent records');
+    }
+});
+
+app.post('/consent-records/delete/:consentId', requireAdmin, async (req, res) => {
+    try {
+        const { consentId } = req.params;
+
+        await pool.execute(
+            'DELETE FROM consent_records WHERE consentId = ?',
+            [consentId]
+        );
+
+        return res.redirect('/consent-records');
+    } catch (err) {
+        console.error('Error deleting consent record:', err);
+        return res.status(500).send('Error deleting consent record');
+    }
+});
+
 
 // =========================
 // DELETE ADMIN ACCOUNT
@@ -1159,13 +1721,44 @@ app.post('/admins/delete/:adminId', requireAdmin, async (req, res) => {
 // START SERVER
 // =========================
 
-const PORT = process.env.PORT || 3000;
+const ssl = {
+    key: fs.readFileSync(path.join(__dirname, 'ssl', 'selfsigned.key')),
+    cert: fs.readFileSync(path.join(__dirname, 'ssl', 'selfsigned.crt'))
+};
+
+const PORT = process.env.PORT || 443;
 
 async function startServer() {
     await ensurePlayerSchema();
+    await ensureConsentSchema();
 
-    app.listen(PORT, () => {
-        console.log(`Server is running on http://localhost:${PORT}`);
+    const connection = await pool.getConnection();
+
+    try {
+        await connection.beginTransaction();
+        await rebuildSwappedRegions(connection);
+        await connection.commit();
+    } catch (err) {
+        await connection.rollback();
+        throw err;
+    } finally {
+        connection.release();
+    }
+
+    https.createServer(ssl, app).listen(PORT, () => {
+        console.log(`HTTPS server is running on https://localhost:${PORT}`);
+    });
+
+    const http = require('http');
+
+    http.createServer((req, res) => {
+        const host = req.headers.host || 'localhost';
+        const redirectUrl = `https://${host}${req.url}`;
+
+        res.writeHead(301, { Location: redirectUrl });
+        res.end();
+    }).listen(80, () => {
+        console.log('HTTP redirect server is running on port 80');
     });
 }
 
@@ -1188,7 +1781,7 @@ async function shutdownServer(signal) {
 process.on('SIGINT', () => shutdownServer('SIGINT'));
 process.on('SIGTERM', () => shutdownServer('SIGTERM'));
 
-app.post('/players/extract-image', requireAdmin, ocrUpload.single('profileImage'), async (req, res) => {
+app.post('/players/extract-image', requireAdmin, requireConsent, ocrUpload.single('profileImage'), async (req, res) => {
     try {
         if (!req.file) {
             return res.status(400).json({ error: 'No image uploaded' });
