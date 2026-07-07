@@ -1783,7 +1783,7 @@ async function shutdownServer(signal) {
 process.on('SIGINT', () => shutdownServer('SIGINT'));
 process.on('SIGTERM', () => shutdownServer('SIGTERM'));
 
-app.post('/players/extract-image', requireAdmin, requireConsent, ocrUpload.single('profileImage'), async (req, res) => {
+app.post('/players/extract-image', requireAdmin, ocrUpload.single('profileImage'), async (req, res) => {
     try {
         if (!req.file) {
             return res.status(400).json({ error: 'No image uploaded' });
