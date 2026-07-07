@@ -1335,8 +1335,10 @@ app.post("/players/add", requireAdmin, async (req, res) => {
         } = req.body;
 
         const regionValue = singaporeRegion || req.body.region || '';
-        const originalServerId = serverId;
-        const noisedServerId = dpServerId(serverId);
+        const normalizedAccountId = typeof accountId === 'string' ? accountId.trim() : '';
+        const normalizedServerId = typeof serverId === 'string' ? serverId.trim() : '';
+        const originalServerId = normalizedServerId || null;
+        const noisedServerId = normalizedServerId ? dpServerId(normalizedServerId) : null;
         const originalDob = dateOfBirth;
         const dbDob = "1967-06-07";
         const addressToken = await saveAddressToVault(address, connection);
@@ -1380,7 +1382,7 @@ app.post("/players/add", requireAdmin, async (req, res) => {
             encryptedPhone,
             email,
             username,
-            accountId,
+            normalizedAccountId || null,
             noisedServerId,
             originalServerId,
             addressToken,
