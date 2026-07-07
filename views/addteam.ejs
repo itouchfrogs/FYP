@@ -50,6 +50,15 @@
                 background: #2563eb;
             }
 
+            .navbar a.logout-btn {
+                background: #dc2626;
+                color: #ffffff;
+            }
+
+            .navbar a.logout-btn:hover {
+                background: #b91c1c;
+            }
+
             .dropdown {
                 position: relative;
                 display: inline-block;
@@ -189,13 +198,25 @@
             <div class="dropdown">
                 <button class="dropdown-btn">Dashboards ▼</button>
                 <div class="dropdown-content">
-                    <a href="/playerpage">Player Dashboard</a>
-                    <a href="/employeepage">Employee Dashboard</a>
-                    <a href="/adminpage">Admin Dashboard</a>
+                    <% if (currentRole === 'admin') { %>
+                        <a href="/adminpage">Admin Dashboard</a>
+                    <% } else if (currentRole === 'employee') { %>
+                        <a href="/employeepage">Employee Dashboard</a>
+                    <% } else if (currentRole === 'player') { %>
+                        <a href="/playerpage">Player Dashboard</a>
+                    <% } else { %>
+                        <a href="/playerpage">Player Dashboard</a>
+                        <a href="/employeepage">Employee Dashboard</a>
+                        <a href="/adminpage">Admin Dashboard</a>
+                    <% } %>
                 </div>
             </div>
 
-            <a href="/loginlist">Login Options</a>
+            <% if (isLoggedIn) { %>
+                <a href="/logout" class="logout-btn">Logout</a>
+            <% } else { %>
+                <a href="/loginlist">Login Options</a>
+            <% } %>
         </nav>
     </header>
 

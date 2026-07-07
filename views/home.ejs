@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html>
 <head>
   <title>MPL Singapore</title>
@@ -48,6 +48,15 @@
 
     .navbar a.active {
       background: #2563eb;
+    }
+
+    .navbar a.logout-btn {
+      background: #dc2626;
+      color: #ffffff;
+    }
+
+    .navbar a.logout-btn:hover {
+      background: #b91c1c;
     }
 
     .dropdown {
@@ -127,6 +136,38 @@
       margin: 0 auto 20px;
     }
 
+    .consent-highlight {
+      margin-top: 20px;
+      display: inline-flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .consent-highlight .consent-note {
+      margin: 0;
+      color: #991b1b;
+      font-weight: 700;
+      font-size: 0.95rem;
+    }
+
+    .consent-highlight .consent-btn {
+      text-decoration: none;
+      background: #dc2626;
+      color: #ffffff;
+      padding: 12px 24px;
+      border-radius: 999px;
+      font-weight: 700;
+      box-shadow: 0 8px 18px rgba(220, 38, 38, 0.3);
+      transition: transform 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .consent-highlight .consent-btn:hover {
+      background: #b91c1c;
+      transform: translateY(-1px);
+      box-shadow: 0 10px 22px rgba(185, 28, 28, 0.34);
+    }
+
     .teams-section {
       background: #ffffff;
       border-radius: 14px;
@@ -158,6 +199,134 @@
       color: #1f2937;
     }
 
+    .contact-section {
+      background: #ffffff;
+      border-radius: 14px;
+      box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+      padding: 24px 28px;
+      margin-top: 24px;
+      text-align: center;
+    }
+
+    .contact-section h2 {
+      margin: 0 0 10px;
+      font-size: 1.3rem;
+    }
+
+    .contact-section p {
+      margin: 6px 0;
+      color: #374151;
+    }
+
+    .contact-section a {
+      color: #1d4ed8;
+      text-decoration: none;
+      font-weight: 600;
+    }
+
+    .contact-section a:hover {
+      text-decoration: underline;
+    }
+
+    .stats-section {
+      background: #ffffff;
+      border-radius: 14px;
+      box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+      padding: 28px;
+      margin-top: 24px;
+    }
+
+    .stats-header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+
+    .stats-title {
+      margin: 0;
+      font-size: 1.5rem;
+    }
+
+    .stats-note {
+      margin: 0;
+      color: #475569;
+      font-size: 0.95rem;
+    }
+
+    .stats-verified {
+      color: #166534;
+      font-weight: 700;
+    }
+
+    .stats-warning {
+      color: #991b1b;
+      font-weight: 700;
+    }
+
+    .stats-empty {
+      margin: 0;
+      color: #6b7280;
+      text-align: center;
+      padding: 18px 0 8px;
+    }
+
+    .chart-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: grid;
+      gap: 16px;
+    }
+
+    .chart-row {
+      display: grid;
+      grid-template-columns: minmax(120px, 160px) 1fr auto;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .chart-label {
+      font-weight: 700;
+      color: #1f2937;
+      word-break: break-word;
+    }
+
+    .chart-track {
+      height: 18px;
+      background: linear-gradient(90deg, #dbeafe 0%, #eff6ff 100%);
+      border-radius: 999px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .chart-bar {
+      height: 100%;
+      border-radius: 999px;
+      background: linear-gradient(90deg, #0f766e 0%, #2563eb 100%);
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+    }
+
+    .chart-value {
+      min-width: 72px;
+      text-align: right;
+      font-weight: 700;
+      color: #0f172a;
+    }
+
+    @media (max-width: 640px) {
+      .chart-row {
+        grid-template-columns: 1fr;
+        gap: 8px;
+      }
+
+      .chart-value {
+        text-align: left;
+      }
+    }
+
   </style>
 </head>
 <body>
@@ -170,13 +339,25 @@
         <div class="dropdown">
         <button class="dropdown-btn">Dashboards ▼</button>
         <div class="dropdown-content">
-          <a href="/playerpage">Player Dashboard</a>
-          <a href="/adminpage">Admin Dashboard</a>
-          <a href="/employeepage">Employee Dashboard</a>
+          <% if (currentRole === 'admin') { %>
+            <a href="/adminpage">Admin Dashboard</a>
+          <% } else if (currentRole === 'employee') { %>
+            <a href="/employeepage">Employee Dashboard</a>
+          <% } else if (currentRole === 'player') { %>
+            <a href="/playerpage">Player Dashboard</a>
+          <% } else { %>
+            <a href="/playerpage">Player Dashboard</a>
+            <a href="/adminpage">Admin Dashboard</a>
+            <a href="/employeepage">Employee Dashboard</a>
+          <% } %>
         </div>
       </div>
-      
-      <a href="/loginlist">Login Options</a>
+
+      <% if (isLoggedIn) { %>
+        <a href="/logout" class="logout-btn">Logout</a>
+      <% } else { %>
+        <a href="/loginlist">Login Options</a>
+      <% } %>
     </nav>
   </header>
 
@@ -185,6 +366,12 @@
       <img class="hero-logo" src="/images/MPL%20logo.png" alt="MPL Singapore logo">
       <h1 class="page-title">MLBB Professional League Singapore</h1>
       <p>Welcome to MPL Singapore. Use the navigation above to view players, add new players, manage teams, or sign in.</p>
+      <% if (showConsentCta) { %>
+        <div class="consent-highlight">
+          <p class="consent-note">Important: Complete the Consent Form if you are a player and intend to have your information stored.</p>
+          <a class="consent-btn" href="/consent">Fill Up Consent Form</a>
+        </div>
+      <% } %>
     </section>
 
     <section class="teams-section">
@@ -195,12 +382,62 @@
         <% }) %>
       </ul>
     </section>
+
+    <section class="stats-section">
+      <div class="stats-header">
+        <!-- [STAT-VIEW-1] Region statistics section title and status message. -->
+        <h2 class="stats-title">Players by Region</h2>
+        <% if (regionStatsAvailable) { %>
+          <p class="stats-note stats-verified"><%= regionStatsMessage %></p>
+        <% } else { %>
+          <p class="stats-note stats-warning"><%= regionStatsMessage %></p>
+        <% } %>
+      </div>
+
+      <!-- [STAT-VIEW-2] Compute chart scale using swapped-region counts. -->
+      <% const stats = Array.isArray(regionStats) ? regionStats : []; %>
+      <% const maxSwappedCount = stats.reduce((maxValue, item) => Math.max(maxValue, item.swappedCount || 0), 0); %>
+
+      <!-- [STAT-VIEW-3] Show fallback message when accurate swapped statistics are unavailable. -->
+      <% if (!regionStatsAvailable) { %>
+        <p class="stats-empty">Information not available yet.</p>
+      <% } else if (stats.length === 0) { %>
+        <p class="stats-empty">No regional player statistics available yet.</p>
+      <% } else { %>
+        <!-- [STAT-VIEW-4] Render each region as a horizontal bar using swapped counts. -->
+        <ul class="chart-list">
+          <% stats.forEach((item) => { %>
+            <% const barWidth = maxSwappedCount > 0 ? ((item.swappedCount / maxSwappedCount) * 100).toFixed(2) : 0; %>
+            <li class="chart-row">
+              <span class="chart-label"><%= item.region %></span>
+              <div class="chart-track" aria-hidden="true">
+                <div class="chart-bar" data-width="<%= barWidth %>"></div>
+              </div>
+              <span class="chart-value"><%= item.swappedCount %> player<%= item.swappedCount === 1 ? '' : 's' %></span>
+            </li>
+          <% }) %>
+        </ul>
+      <% } %>
+    </section>
+
+    <section class="contact-section">
+      <h2>Contact Us for Inquiries</h2>
+      <p>For any inquiries, please contact the MPL Singapore support team.</p>
+      <p>Email: <a href="mailto:support@MPLSingapore.com">support@MPLSingapore.com</a></p>
+      <p>Phone: +65 6767 6767</p>
+    </section>
   </main>
 
   <script>
     document.addEventListener('DOMContentLoaded', function() {
       const dropdownBtn = document.querySelector('.dropdown-btn');
       const dropdownContent = document.querySelector('.dropdown-content');
+      const chartBars = document.querySelectorAll('.chart-bar[data-width]');
+
+      chartBars.forEach(function(bar) {
+        const widthValue = Number.parseFloat(bar.dataset.width || '0');
+        bar.style.width = `${Math.max(0, Math.min(widthValue, 100))}%`;
+      });
 
       // Toggle dropdown on button click
       dropdownBtn.addEventListener('click', function(e) {

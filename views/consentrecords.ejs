@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Consent Records</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      background: #f3f4f6;
+      color: #111827;
+    }
+
+    .navbar {
+      background: #111827;
+      color: #f9fafb;
+      padding: 16px 24px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .navbar .brand {
+      font-size: 1.25rem;
+      font-weight: 700;
+    }
+
+    .navbar nav {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .navbar a {
+      color: #f9fafb;
+      text-decoration: none;
+      padding: 8px 12px;
+      border-radius: 6px;
+      transition: background 0.2s ease;
+    }
+
+    .navbar a:hover {
+      background: rgba(255, 255, 255, 0.12);
+    }
+
+    .navbar a.active {
+      background: #2563eb;
+    }
+
+    .page-content {
+      max-width: 1400px;
+      margin: 28px auto;
+      padding: 0 20px;
+    }
+
+    .page-title {
+      margin-top: 0;
+      margin-bottom: 10px;
+      font-size: 2rem;
+    }
+
+    .page-subtitle {
+      margin-top: 0;
+      color: #6b7280;
+      margin-bottom: 18px;
+    }
+
+    .purpose-explainer {
+      background: #ffffff;
+      border-radius: 12px;
+      box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+      padding: 16px 18px;
+      margin-bottom: 16px;
+    }
+
+    .purpose-explainer h2 {
+      margin: 0 0 10px;
+      font-size: 1.05rem;
+      color: #0f172a;
+    }
+
+    .purpose-explainer p {
+      margin: 0 0 8px;
+      color: #475569;
+      line-height: 1.45;
+      font-size: 0.95rem;
+    }
+
+    .purpose-explainer ul {
+      margin: 0;
+      padding-left: 18px;
+      color: #1e293b;
+      line-height: 1.45;
+      font-size: 0.95rem;
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+      background: #ffffff;
+      border-radius: 12px;
+      box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 1300px;
+    }
+
+    th,
+    td {
+      padding: 12px 10px;
+      border-bottom: 1px solid #e5e7eb;
+      text-align: left;
+      vertical-align: top;
+      font-size: 0.95rem;
+      white-space: nowrap;
+    }
+
+    th {
+      background: #f9fafb;
+      color: #111827;
+      font-weight: 700;
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+
+    tr:hover td {
+      background: #f8fafc;
+    }
+
+    .purpose-list {
+      margin: 0;
+      padding-left: 18px;
+      white-space: normal;
+      max-width: 340px;
+    }
+
+    .purpose-list li {
+      margin-bottom: 4px;
+    }
+
+    .empty {
+      padding: 24px;
+      color: #6b7280;
+    }
+
+    .delete-warning {
+      margin-top: 10px;
+      color: #991b1b;
+      font-weight: 700;
+    }
+
+    .delete-form {
+      margin: 0;
+    }
+
+    .delete-btn {
+      border: none;
+      background: #dc2626;
+      color: #ffffff;
+      padding: 6px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 700;
+      font-size: 0.83rem;
+      transition: background 0.2s ease;
+    }
+
+    .delete-btn:hover {
+      background: #b91c1c;
+    }
+  </style>
+</head>
+<body>
+  <header class="navbar">
+    <div class="brand">MPL Singapore</div>
+    <nav>
+      <a href="/">Home</a>
+      <a href="/adminpage">Admin Dashboard</a>
+      <a href="/consent-records" class="active">Consent Records</a>
+      <a href="/logout">Logout</a>
+    </nav>
+  </header>
+
+  <main class="page-content">
+    <h1 class="page-title">Consent Records</h1>
+    <p class="page-subtitle">Admin-only audit trail of consent submissions. Total records: <%= consentRecords.length %></p>
+
+    <section class="purpose-explainer">
+      <h2>Purpose Reference</h2>
+      <p>The Purposes column stores the selected consent purpose keys. Use this reference to interpret each key.</p>
+      <p><strong>Minor verification requirement:</strong> If the age is below 18, contact the listed parent/guardian information to confirm that permission was truly given.</p>
+      <p class="delete-warning">Delete records only when consent is rescinded. Before deleting, make sure all related personal data for that person is also removed from other records/systems.</p>
+      <ul>
+        <li><strong>player_registration</strong>: Player registration and roster administration.</li>
+        <li><strong>identity_verification</strong>: Identity and eligibility verification for league participation.</li>
+        <li><strong>competition_operations</strong>: Competition operations, scheduling, and team coordination.</li>
+      </ul>
+    </section>
+
+    <div class="table-wrap">
+      <% if (!consentRecords || consentRecords.length === 0) { %>
+        <div class="empty">No consent records found.</div>
+      <% } else { %>
+        <table>
+          <thead>
+            <tr>
+              <th>Full Name</th>
+              <th>Contact Email</th>
+              <th>Age</th>
+              <th>Parental Info (&lt;18 only)</th>
+              <th>Purposes</th>
+              <th>Consented At</th>
+              <th>Subject Identifier</th>
+              <th>Consent Version</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% consentRecords.forEach((record) => { %>
+              <tr>
+                <td><%= record.fullName || '' %></td>
+                <td><%= record.contactEmail || '' %></td>
+                <td><%= (record.age !== null && record.age !== undefined) ? record.age : '' %></td>
+                <td>
+                  <% if (record.age !== null && record.age !== undefined && Number(record.age) < 18) { %>
+                    <strong>Permission:</strong> <%= Number(record.parentalPermissionGiven) === 1 ? 'Given' : 'Not Given' %><br />
+                    <strong>Parent Name:</strong> <%= record.parentalFullName || '-' %><br />
+                    <strong>Parent Phone:</strong> <%= record.parentalPhone || '-' %>
+                  <% } else { %>
+                    -
+                  <% } %>
+                </td>
+                <td>
+                  <% if (record.parsedPurposes && record.parsedPurposes.length > 0) { %>
+                    <ul class="purpose-list">
+                      <% record.parsedPurposes.forEach((purpose) => { %>
+                        <li><%= purpose %></li>
+                      <% }) %>
+                    </ul>
+                  <% } else { %>
+                    -
+                  <% } %>
+                </td>
+                <td><%= record.consentedAt ? new Date(record.consentedAt).toLocaleString() : '' %></td>
+                <td><%= record.subjectIdentifier || '' %></td>
+                <td><%= record.consentVersion || '' %></td>
+                <td>
+                  <form class="delete-form" action="/consent-records/delete/<%= record.consentId %>" method="POST" onsubmit="return confirm('Delete this consent record only if consent was rescinded. Ensure all related personal data is removed too. Continue?');">
+                    <button class="delete-btn" type="submit">Delete</button>
+                  </form>
+                </td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      <% } %>
+    </div>
+  </main>
+</body>
+</html>

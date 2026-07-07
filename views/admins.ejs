@@ -1,41 +1,228 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Admin/Employee Accounts</title>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Account Management</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background: #f3f4f6;
+            color: #111827;
+        }
+
+        .navbar {
+            background: #111827;
+            color: #f9fafb;
+            padding: 16px 24px;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        .navbar .brand {
+            font-size: 1.25rem;
+            font-weight: 700;
+        }
+
+        .navbar nav {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .navbar a {
+            color: #f9fafb;
+            text-decoration: none;
+            padding: 8px 12px;
+            border-radius: 6px;
+            transition: background 0.2s ease;
+        }
+
+        .navbar a:hover {
+            background: rgba(255, 255, 255, 0.12);
+        }
+
+        .navbar a.active {
+            background: #2563eb;
+        }
+
+        .page-content {
+            max-width: 1180px;
+            margin: 40px auto;
+            padding: 0 24px 40px;
+        }
+
+        .page-card {
+            background: #ffffff;
+            border-radius: 14px;
+            box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+            padding: 28px;
+        }
+
+        .page-title {
+            margin: 0 0 10px;
+            font-size: 2rem;
+        }
+
+        .page-subtitle {
+            margin: 0 0 22px;
+            color: #6b7280;
+            line-height: 1.5;
+        }
+
+        .actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-bottom: 22px;
+        }
+
+        .actions a {
+            text-decoration: none;
+            background: #2563eb;
+            color: #ffffff;
+            padding: 12px 16px;
+            border-radius: 10px;
+            font-weight: 700;
+            transition: background 0.2s ease;
+        }
+
+        .actions a:hover {
+            background: #1d4ed8;
+        }
+
+        .table-wrap {
+            overflow-x: auto;
+            border-radius: 12px;
+            border: 1px solid #e5e7eb;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 620px;
+        }
+
+        th, td {
+            padding: 14px 12px;
+            border-bottom: 1px solid #e5e7eb;
+            text-align: left;
+            vertical-align: middle;
+        }
+
+        th {
+            background: #f9fafb;
+            font-weight: 700;
+            color: #111827;
+        }
+
+        tr:hover td {
+            background: #f8fafc;
+        }
+
+        .role-badge {
+            display: inline-block;
+            padding: 6px 10px;
+            border-radius: 999px;
+            background: #e5edff;
+            color: #1e3a8a;
+            font-weight: 700;
+            font-size: 0.85rem;
+        }
+
+        .delete-form {
+            margin: 0;
+        }
+
+        .delete-btn {
+            border: none;
+            background: #dc2626;
+            color: #ffffff;
+            padding: 8px 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 700;
+            transition: background 0.2s ease;
+        }
+
+        .delete-btn:hover {
+            background: #b91c1c;
+        }
+
+        .empty {
+            padding: 20px 0 0;
+            color: #6b7280;
+        }
+
+        @media (max-width: 640px) {
+            .page-content {
+                padding: 0 12px 24px;
+            }
+
+            .page-card {
+                padding: 20px 16px;
+            }
+        }
+    </style>
 </head>
 <body>
-    <h1>Admin Accounts</h1>
-    
-    <p><a href="/admins/add">Add New Admin Account</a></p>
-    <p><a href="/adminpage">Back to Admin Page</a></p>
-    
-    <% if (admins && admins.length > 0) { %>
-        <table>
-            <thead>
-                <tr>
-                    <th>ID</th>
-                    <th>Username</th>
-                    <th>Role</th>
-                    <th>Action</th>
-                </tr>
-            </thead>
-            <tbody>
-                <% admins.forEach(function(admin) { %>
-                    <tr>
-                        <td><%= admin.adminId %></td>
-                        <td><%= admin.username %></td>
-                        <td><%= admin.role %></td>
-                        <td>
-                            <form action="/admins/delete/<%= admin.adminId %>" method="POST" style="display:inline;">
-                                <button type="submit">Delete</button>
-                            </form>
-                        </td>
-                    </tr>
-                <% }) %>
-            </tbody>
-        </table>
-    <% } else { %>
-        <p>No admin accounts found.</p>
-    <% } %>
+    <header class="navbar">
+        <div class="brand">MPL Singapore</div>
+        <nav>
+            <a href="/">Home</a>
+            <a href="/adminpage">Admin Dashboard</a>
+            <a href="/admins" class="active">Account Management</a>
+            <a href="/logout">Logout</a>
+        </nav>
+    </header>
+
+    <main class="page-content">
+        <section class="page-card">
+            <h1 class="page-title">Account Management</h1>
+            <p class="page-subtitle">View, create, and remove admin access accounts.</p>
+
+            <div class="actions">
+                <a href="/admins/add">Add New Admin/Employee Account</a>
+                <a href="/adminpage">Back to Admin Dashboard</a>
+            </div>
+
+            <% if (admins && admins.length > 0) { %>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Username</th>
+                                <th>Role</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <% admins.forEach(function(admin) { %>
+                                <tr>
+                                    <td><%= admin.adminId %></td>
+                                    <td><%= admin.username %></td>
+                                    <td><span class="role-badge"><%= admin.role %></span></td>
+                                    <td>
+                                        <form class="delete-form" action="/admins/delete/<%= admin.adminId %>" method="POST">
+                                            <button class="delete-btn" type="submit">Delete</button>
+                                        </form>
+                                    </td>
+                                </tr>
+                            <% }) %>
+                        </tbody>
+                    </table>
+                </div>
+            <% } else { %>
+                <p class="empty">No admin accounts found.</p>
+            <% } %>
+        </section>
+    </main>
 </body>
 </html>
