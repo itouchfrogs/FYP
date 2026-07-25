@@ -674,16 +674,110 @@ app.get("/", async (req, res) => {
 // LOGIN PAGE
 // =========================
 
+const MAX_ATTEMPTS = 3;
+const LOCKOUT_TIME = 5 * 60 * 1000; // 5 minutes
+
+const loginAttempts = {};
+
+async function login() {
+    const now = Date.now();
+
+    // Check if user is currently locked out
+    if (now < lockoutUntil) {
+        const remaining = Math.ceil((lockoutUntil - now) / 1000);
+        const minutes = Math.floor(remaining / 60);
+        const seconds = remaining % 60;
+
+        alert(
+            `Too many failed login attempts.\nPlease try again in ${minutes}m ${seconds}s.`
+        );
+        return;
+    }
+
+    const username = document.getElementById("username").value.trim();
+    const password = document.getElementById("password").value;
+
+    try {
+        // Your existing login code here
+        await signInWithEmailAndPassword(auth, username, password);
+
+        // Login successful
+        failedAttempts = 0;
+        lockoutUntil = 0;
+
+        localStorage.removeItem("failedAttempts");
+        localStorage.removeItem("lockoutUntil");
+
+        window.location.href = "home.html";
+
+    } catch (error) {
+
+        failedAttempts++;
+        localStorage.setItem("failedAttempts", failedAttempts);
+
+        if (failedAttempts >= MAX_ATTEMPTS) {
+            lockoutUntil = Date.now() + LOCKOUT_TIME;
+
+            localStorage.setItem("lockoutUntil", lockoutUntil);
+
+            alert("Too many failed login attempts.\nLogin has been disabled for 5 minutes.");
+        } else {
+            alert(
+                `Incorrect username or password.\nAttempt ${failedAttempts} of ${MAX_ATTEMPTS}.`
+            );
+        }
+    }
+}
+
 app.get('/login', (req, res) => {
     if (redirectToRoleDashboard(req, res)) {
         return;
     }
 
-    res.render('login');
+    const ip = req.ip;
+    const attemptData = loginAttempts[ip] || {};
+
+    let remainingTime = 0;
+
+    if (attemptData.lockoutUntil && attemptData.lockoutUntil > Date.now()) {
+        remainingTime = Math.ceil(
+            (attemptData.lockoutUntil - Date.now()) / 1000
+        );
+    }
+
+    res.render('login', {
+        remainingTime,
+        errorMessage: '',
+        pageTitle: 'Admin Login'
+    });
 });
 
 app.post('/login', async (req, res) => {
     try {
+        const ip = req.ip;
+        const now = Date.now();
+
+        if (!loginAttempts[ip]) {
+            loginAttempts[ip] = {
+                attempts: 0,
+                lockoutUntil: 0
+            };
+        }
+
+        const attemptData = loginAttempts[ip];
+
+        if (attemptData.lockoutUntil > now) {
+            const remainingTime = Math.ceil(
+                (attemptData.lockoutUntil - now) / 1000
+            );
+
+            return res.status(429).render('login', {
+                remainingTime,
+                errorMessage: 'Too many failed attempts. Please try again shortly.',
+                pageTitle: 'Admin Login'
+            });
+        }
+
         const { username, password } = req.body;
 
         const [rows] = await pool.execute(
@@ -692,8 +786,26 @@ app.post('/login', async (req, res) => {
         );
 
         if (rows.length === 0) {
-            return res.status(401).send('Invalid username or password');
+            attemptData.attempts++;
+
+        if (attemptData.attempts >= MAX_ATTEMPTS) {
+            attemptData.lockoutUntil = Date.now() + LOCKOUT_TIME;
+            attemptData.attempts = 0;
         }
+
+        return res.status(401).render('login', {
+            remainingTime: attemptData.lockoutUntil
+                ? Math.ceil((attemptData.lockoutUntil - Date.now()) / 1000)
+                : 0,
+            errorMessage: 'Invalid username or password.',
+            pageTitle: 'Admin Login'
+        });
+        }
+
+        loginAttempts[ip] = {
+            attempts: 0,
+            lockoutUntil: 0
+        };
 
         const admin = rows[0];
         let match = false;
@@ -709,7 +821,11 @@ app.post('/login', async (req, res) => {
         }
 
         if (!match) {
-            return res.status(401).send('Invalid username or password');
+            return res.status(401).render('login', {
+                remainingTime: 0,
+                errorMessage: 'Invalid username or password.',
+                pageTitle: 'Admin Login'
+            });
         }
 
         if (admin.role && admin.role !== 'admin' && admin.role !== 'employee') {
@@ -1023,11 +1139,46 @@ app.get('/employeelogin', (req, res) => {
         return;
     }
 
-    res.render('employeelogin', { error: null });
+    const ip = req.ip;
+    const attemptKey = `employee:${ip}`;
+    const attemptData = loginAttempts[attemptKey] || {};
+
+    let remainingTime = 0;
+
+    if (attemptData.lockoutUntil && attemptData.lockoutUntil > Date.now()) {
+        remainingTime = Math.ceil((attemptData.lockoutUntil - Date.now()) / 1000);
+    }
+
+    res.render('employeelogin', {
+        error: null,
+        remainingTime
+    });
 });
 
 app.post('/employeelogin', async (req, res) => {
     try {
+        const ip = req.ip;
+        const now = Date.now();
+        const attemptKey = `employee:${ip}`;
+
+        if (!loginAttempts[attemptKey]) {
+            loginAttempts[attemptKey] = {
+                attempts: 0,
+                lockoutUntil: 0
+            };
+        }
+
+        const attemptData = loginAttempts[attemptKey];
+
+        if (attemptData.lockoutUntil > now) {
+            const remainingTime = Math.ceil((attemptData.lockoutUntil - now) / 1000);
+
+            return res.status(429).render('employeelogin', {
+                error: 'Too many failed attempts. Please try again shortly.',
+                remainingTime
+            });
+        }
+
         const { name, password } = req.body;
 
         const [rows] = await pool.execute(
@@ -1039,23 +1190,53 @@ app.post('/employeelogin', async (req, res) => {
         );
 
         if (rows.length === 0) {
-            return res.render('employeelogin', { error: 'Invalid name or password' });
+            attemptData.attempts++;
+
+            if (attemptData.attempts >= MAX_ATTEMPTS) {
+                attemptData.lockoutUntil = Date.now() + LOCKOUT_TIME;
+                attemptData.attempts = 0;
+            }
+
+            return res.status(401).render('employeelogin', {
+                error: 'Invalid name or password',
+                remainingTime: attemptData.lockoutUntil
+                    ? Math.ceil((attemptData.lockoutUntil - Date.now()) / 1000)
+                    : 0
+            });
         }
+
+        loginAttempts[attemptKey] = {
+            attempts: 0,
+            lockoutUntil: 0
+        };
 
         const user = rows[0];
-
         let match = false;
+
         try {
             match = await bcrypt.compare(password, user.password);
-        } catch (e) {
+        } catch (error) {
             match = false;
         }
+
         if (!match && password === user.password) {
             match = true;
         }
 
         if (!match) {
-            return res.render('employeelogin', { error: 'Invalid name or password' });
+            attemptData.attempts++;
+
+            if (attemptData.attempts >= MAX_ATTEMPTS) {
+                attemptData.lockoutUntil = Date.now() + LOCKOUT_TIME;
+                attemptData.attempts = 0;
+            }
+
+            return res.status(401).render('employeelogin', {
+                error: 'Invalid name or password',
+                remainingTime: attemptData.lockoutUntil
+                    ? Math.ceil((attemptData.lockoutUntil - Date.now()) / 1000)
+                    : 0
+            });
         }
 
         req.session.employeeId = user.employeeId;
@@ -1335,10 +1516,8 @@ app.post("/players/add", requireAdmin, async (req, res) => {
         } = req.body;
 
         const regionValue = singaporeRegion || req.body.region || '';
-        const normalizedAccountId = typeof accountId === 'string' ? accountId.trim() : '';
-        const normalizedServerId = typeof serverId === 'string' ? serverId.trim() : '';
-        const originalServerId = normalizedServerId || null;
-        const noisedServerId = normalizedServerId ? dpServerId(normalizedServerId) : null;
+        const originalServerId = serverId;
+        const noisedServerId = dpServerId(serverId);
         const originalDob = dateOfBirth;
         const dbDob = "1967-06-07";
         const addressToken = await saveAddressToVault(address, connection);
@@ -1382,7 +1561,7 @@ app.post("/players/add", requireAdmin, async (req, res) => {
             encryptedPhone,
             email,
             username,
-            normalizedAccountId || null,
+            accountId,
             noisedServerId,
             originalServerId,
             addressToken,
@@ -1783,7 +1962,7 @@ async function shutdownServer(signal) {
 process.on('SIGINT', () => shutdownServer('SIGINT'));
 process.on('SIGTERM', () => shutdownServer('SIGTERM'));
 
-app.post('/players/extract-image', requireAdmin, ocrUpload.single('profileImage'), async (req, res) => {
+app.post('/players/extract-image', requireAdmin, requireConsent, ocrUpload.single('profileImage'), async (req, res) => {
     try {
         if (!req.file) {
             return res.status(400).json({ error: 'No image uploaded' });
