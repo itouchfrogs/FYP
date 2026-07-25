@@ -1758,7 +1758,7 @@ app.post("/admins/add", requireAdmin, async (req, res) => {
         }
 
         // Validate role
-        if (role !== 'admin' && role !== 'player') {
+        if (role !== 'admin' && role !== 'employee') {
             return res.status(400).send("Role must be 'admin' or 'player'");
         }
 
