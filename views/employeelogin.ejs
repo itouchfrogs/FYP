@@ -74,6 +74,16 @@
       margin-bottom: 16px;
       font-size: 0.95rem;
     }
+
+    .login-card .timer {
+      background: #fef3c7;
+      color: #92400e;
+      border-radius: 8px;
+      padding: 10px 14px;
+      margin-bottom: 16px;
+      font-size: 0.95rem;
+      font-weight: 600;
+    }
   </style>
 </head>
 <body>
@@ -81,6 +91,11 @@
     <h1>Employee Login</h1>
     <% if (typeof error !== 'undefined' && error) { %>
       <div class="error"><%= error %></div>
+    <% } %>
+    <% if (typeof remainingTime !== 'undefined' && remainingTime > 0) { %>
+      <div class="timer" id="lockoutTimer" data-seconds="<%= remainingTime %>">
+        Try again in <strong id="timerValue"><%= remainingTime %></strong> seconds.
+      </div>
     <% } %>
     <form action="/employeelogin" method="POST">
       <label for="name">Name</label>
@@ -93,5 +108,29 @@
     </form>
     <p class="note">Use your employee credentials to access the dashboard.</p>
   </div>
+
+  <script>
+    const timerElement = document.getElementById('lockoutTimer');
+    const timerValue = document.getElementById('timerValue');
+
+    if (timerElement && timerValue) {
+      let remainingSeconds = Number(timerElement.dataset.seconds || 0);
+
+      const updateTimer = () => {
+        if (remainingSeconds <= 0) {
+          timerElement.style.display = 'none';
+          return;
+        }
+
+        const minutes = Math.floor(remainingSeconds / 60);
+        const seconds = remainingSeconds % 60;
+        timerValue.textContent = `${minutes}m ${seconds}s`;
+        remainingSeconds -= 1;
+      };
+
+      updateTimer();
+      setInterval(updateTimer, 1000);
+    }
+  </script>
 </body>
 </html>
