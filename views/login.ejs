@@ -1,7 +1,7 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html>
 <head>
-  <title>Admin Login</title>
+  <title><%= typeof pageTitle !== 'undefined' && pageTitle ? pageTitle : 'Admin Login' %></title>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -65,21 +65,73 @@
       color: #6b7280;
       font-size: 0.95rem;
     }
+
+    .login-card .message {
+      margin-bottom: 16px;
+      padding: 10px 12px;
+      border-radius: 8px;
+      background: #fef2f2;
+      color: #b91c1c;
+      font-size: 0.95rem;
+    }
   </style>
 </head>
 <body>
+  <% const lockoutActive = Number(remainingTime || 0) > 0; %>
   <div class="login-card">
-    <h1>Admin Login</h1>
+    <h1><%= typeof pageTitle !== 'undefined' && pageTitle ? pageTitle : 'Admin Login' %></h1>
+    <% if (typeof errorMessage !== 'undefined' && errorMessage) { %>
+      <div class="message"><%= errorMessage %></div>
+    <% } %>
     <form action="/login" method="POST">
       <label for="username">Username</label>
       <input type="text" id="username" name="username" placeholder="Username" required>
 
       <label for="password">Password</label>
       <input type="password" id="password" name="password" placeholder="Password" required>
-
-      <button type="submit">Login</button>
+      <p id="lockoutTimer" class="note"></p>
+      <p class="note">Use your admin or employee credentials to access the dashboard.</p>
+      <button id="loginButton" type="submit" data-lockout-active="<%= lockoutActive ? 'true' : 'false' %>" data-remaining-time="<%= Number(remainingTime || 0) %>">
+        Login
+      </button>
     </form>
-    <p class="note">Use your admin or employee credentials to access the dashboard.</p>
   </div>
+  <script>
+    const loginButton = document.getElementById("loginButton");
+    let remainingTime = Number(loginButton?.dataset.remainingTime || 0);
+    const lockoutActive = loginButton?.dataset.lockoutActive === 'true';
+
+    const timerElement = document.getElementById("lockoutTimer");
+
+    function updateTimer() {
+      if (remainingTime <= 0) {
+        if (timerElement) {
+          timerElement.innerHTML = "";
+        }
+        if (loginButton) {
+          loginButton.disabled = false;
+        }
+        return;
+      }
+
+      if (loginButton) {
+        loginButton.disabled = true;
+      }
+
+      const minutes = Math.floor(remainingTime / 60);
+      const seconds = remainingTime % 60;
+
+      if (timerElement) {
+        timerElement.innerHTML = `Too many failed attempts. Try again in ${minutes}m ${seconds}s`;
+      }
+
+      remainingTime -= 1;
+      setTimeout(updateTimer, 1000);
+    }
+
+    if (lockoutActive) {
+      updateTimer();
+    }
+  </script>
 </body>
 </html>
