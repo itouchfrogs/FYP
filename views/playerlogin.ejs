@@ -65,21 +65,72 @@
       color: #6b7280;
       font-size: 0.95rem;
     }
+
+    .login-card .error {
+      background: #fee2e2;
+      color: #b91c1c;
+      border-radius: 8px;
+      padding: 10px 14px;
+      margin-bottom: 16px;
+      font-size: 0.95rem;
+    }
+
+    .login-card .timer {
+      background: #fef3c7;
+      color: #92400e;
+      border-radius: 8px;
+      padding: 10px 14px;
+      margin-bottom: 16px;
+      font-size: 0.95rem;
+      font-weight: 600;
+    }
   </style>
 </head>
 <body>
   <div class="login-card">
     <h1>Player Login</h1>
+    <% if (typeof errorMessage !== 'undefined' && errorMessage) { %>
+      <div class="error"><%= errorMessage %></div>
+    <% } %>
+    <% if (typeof remainingTime !== 'undefined' && remainingTime > 0) { %>
+      <div class="timer" id="lockoutTimer" data-seconds="<%= remainingTime %>">
+        Try again in <strong id="timerValue"><%= remainingTime %></strong> seconds.
+      </div>
+    <% } %>
+    <% const lockoutActive = typeof remainingTime !== 'undefined' && remainingTime > 0; %>
     <form action="/playerlogin" method="POST">
       <label for="email">Email</label>
-      <input type="email" id="email" name="email" placeholder="Your email" required>
+      <input type="email" id="email" name="email" placeholder="Your email" required <%= lockoutActive ? 'disabled' : '' %>>
 
       <label for="password">Password</label>
-      <input type="password" id="password" name="password" placeholder="Your password" required>
+      <input type="password" id="password" name="password" placeholder="Your password" required <%= lockoutActive ? 'disabled' : '' %>>
 
-      <button type="submit">Sign in</button>
+      <button type="submit" <%= lockoutActive ? 'disabled' : '' %>>Sign in</button>
     </form>
     <p class="note">If you do not have an account, ask an admin to create a player entry for you.</p>
   </div>
+  <script>
+    const timerElement = document.getElementById('lockoutTimer');
+    const timerValue = document.getElementById('timerValue');
+
+    if (timerElement && timerValue) {
+      let remainingSeconds = Number(timerElement.dataset.seconds || 0);
+
+      const updateTimer = () => {
+        if (remainingSeconds <= 0) {
+          timerElement.style.display = 'none';
+          return;
+        }
+
+        const minutes = Math.floor(remainingSeconds / 60);
+        const seconds = remainingSeconds % 60;
+        timerValue.textContent = `${minutes}m ${seconds}s`;
+        remainingSeconds -= 1;
+      };
+
+      updateTimer();
+      setInterval(updateTimer, 1000);
+    }
+  </script>
 </body>
 </html>
