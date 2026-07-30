@@ -735,19 +735,19 @@ app.get('/login', (req, res) => {
     }
 
     const ip = req.ip;
-    const attemptData = loginAttempts[ip] || {};
+    const attemptKey = `admin:${ip}`;
+    const attemptData = loginAttempts[attemptKey] || {};
 
     let remainingTime = 0;
 
     if (attemptData.lockoutUntil && attemptData.lockoutUntil > Date.now()) {
-        remainingTime = Math.ceil(
-            (attemptData.lockoutUntil - Date.now()) / 1000
-        );
+        remainingTime = Math.ceil((attemptData.lockoutUntil - Date.now()) / 1000);
     }
 
     res.render('login', {
+        error: null,
+        errorMessage: null,
         remainingTime,
-        errorMessage: '',
         pageTitle: 'Admin Login'
     });
 });
@@ -755,16 +755,17 @@ app.get('/login', (req, res) => {
 app.post('/login', async (req, res) => {
     try {
         const ip = req.ip;
+        const attemptKey = `admin:${ip}`;
         const now = Date.now();
 
-        if (!loginAttempts[ip]) {
-            loginAttempts[ip] = {
+        if (!loginAttempts[attemptKey]) {
+            loginAttempts[attemptKey] = {
                 attempts: 0,
                 lockoutUntil: 0
             };
         }
 
-        const attemptData = loginAttempts[ip];
+        const attemptData = loginAttempts[attemptKey];
 
         if (attemptData.lockoutUntil > now) {
             const remainingTime = Math.ceil(
@@ -788,24 +789,19 @@ app.post('/login', async (req, res) => {
         if (rows.length === 0) {
             attemptData.attempts++;
 
-        if (attemptData.attempts >= MAX_ATTEMPTS) {
-            attemptData.lockoutUntil = Date.now() + LOCKOUT_TIME;
-            attemptData.attempts = 0;
-        }
+            if (attemptData.attempts >= MAX_ATTEMPTS) {
+                attemptData.lockoutUntil = Date.now() + LOCKOUT_TIME;
+                attemptData.attempts = 0;
+            }
 
-        return res.status(401).render('login', {
-            remainingTime: attemptData.lockoutUntil
-                ? Math.ceil((attemptData.lockoutUntil - Date.now()) / 1000)
-                : 0,
-            errorMessage: 'Invalid username or password.',
-            pageTitle: 'Admin Login'
-        });
+            return res.status(401).render('login', {
+                remainingTime: attemptData.lockoutUntil
+                    ? Math.ceil((attemptData.lockoutUntil - Date.now()) / 1000)
+                    : 0,
+                errorMessage: 'Invalid username or password.',
+                pageTitle: 'Admin Login'
+            });
         }
-
-        loginAttempts[ip] = {
-            attempts: 0,
-            lockoutUntil: 0
-        };
 
         const admin = rows[0];
         let match = false;
@@ -821,8 +817,17 @@ app.post('/login', async (req, res) => {
         }
 
         if (!match) {
+            attemptData.attempts++;
+
+            if (attemptData.attempts >= MAX_ATTEMPTS) {
+                attemptData.lockoutUntil = Date.now() + LOCKOUT_TIME;
+                attemptData.attempts = 0;
+            }
+
             return res.status(401).render('login', {
-                remainingTime: 0,
+                remainingTime: attemptData.lockoutUntil
+                    ? Math.ceil((attemptData.lockoutUntil - Date.now()) / 1000)
+                    : 0,
                 errorMessage: 'Invalid username or password.',
                 pageTitle: 'Admin Login'
             });
@@ -831,6 +836,11 @@ app.post('/login', async (req, res) => {
         if (admin.role && admin.role !== 'admin' && admin.role !== 'employee') {
             return res.status(403).send('User does not have access');
         }
+
+        loginAttempts[attemptKey] = {
+            attempts: 0,
+            lockoutUntil: 0
+        };
 
         req.session.adminId = admin.adminId;
         delete req.session.employeeId;
