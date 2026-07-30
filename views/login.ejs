@@ -66,22 +66,41 @@
       font-size: 0.95rem;
     }
 
-    .login-card .message {
-      margin-bottom: 16px;
-      padding: 10px 12px;
-      border-radius: 8px;
-      background: #fef2f2;
+    .login-card .error {
+      background: #fee2e2;
       color: #b91c1c;
+      border-radius: 8px;
+      padding: 10px 14px;
+      margin-bottom: 16px;
       font-size: 0.95rem;
+    }
+
+    .login-card .timer {
+      background: #fef3c7;
+      color: #92400e;
+      border-radius: 8px;
+      padding: 10px 14px;
+      margin-bottom: 16px;
+      font-size: 0.95rem;
+      font-weight: 600;
     }
   </style>
 </head>
 <body>
-  <% const lockoutActive = Number(remainingTime || 0) > 0; %>
   <div class="login-card">
-    <h1><%= typeof pageTitle !== 'undefined' && pageTitle ? pageTitle : 'Admin Login' %></h1>
-    <% if (typeof errorMessage !== 'undefined' && errorMessage) { %>
-      <div class="message"><%= errorMessage %></div>
+    <h1>Admin Login</h1>
+    <%
+      const displayError = typeof errorMessage !== 'undefined' && errorMessage
+        ? errorMessage
+        : (typeof error !== 'undefined' ? error : null);
+    %>
+    <% if (displayError) { %>
+      <div class="error"><%= displayError %></div>
+    <% } %>
+    <% if (typeof remainingTime !== 'undefined' && remainingTime > 0) { %>
+      <div class="timer" id="lockoutTimer" data-seconds="<%= remainingTime %>">
+        Try again in <strong id="timerValue"><%= remainingTime %></strong> seconds.
+      </div>
     <% } %>
     <form action="/login" method="POST">
       <label for="username">Username</label>
@@ -89,48 +108,33 @@
 
       <label for="password">Password</label>
       <input type="password" id="password" name="password" placeholder="Password" required>
-      <p id="lockoutTimer" class="note"></p>
-      <p class="note">Use your admin or employee credentials to access the dashboard.</p>
-      <button id="loginButton" type="submit" data-lockout-active="<%= lockoutActive ? 'true' : 'false' %>" data-remaining-time="<%= Number(remainingTime || 0) %>">
-        Login
-      </button>
+
+      <button id="loginButton" type="submit">Login</button>
     </form>
+    <p class="note">Use your admin credentials to access the dashboard.</p>
   </div>
+
   <script>
-    const loginButton = document.getElementById("loginButton");
-    let remainingTime = Number(loginButton?.dataset.remainingTime || 0);
-    const lockoutActive = loginButton?.dataset.lockoutActive === 'true';
+    const timerElement = document.getElementById('lockoutTimer');
+    const timerValue = document.getElementById('timerValue');
 
-    const timerElement = document.getElementById("lockoutTimer");
+    if (timerElement && timerValue) {
+      let remainingSeconds = Number(timerElement.dataset.seconds || 0);
 
-    function updateTimer() {
-      if (remainingTime <= 0) {
-        if (timerElement) {
-          timerElement.innerHTML = "";
+      const updateTimer = () => {
+        if (remainingSeconds <= 0) {
+          timerElement.style.display = 'none';
+          return;
         }
-        if (loginButton) {
-          loginButton.disabled = false;
-        }
-        return;
-      }
 
-      if (loginButton) {
-        loginButton.disabled = true;
-      }
+        const minutes = Math.floor(remainingSeconds / 60);
+        const seconds = remainingSeconds % 60;
+        timerValue.textContent = `${minutes}m ${seconds}s`;
+        remainingSeconds -= 1;
+      };
 
-      const minutes = Math.floor(remainingTime / 60);
-      const seconds = remainingTime % 60;
-
-      if (timerElement) {
-        timerElement.innerHTML = `Too many failed attempts. Try again in ${minutes}m ${seconds}s`;
-      }
-
-      remainingTime -= 1;
-      setTimeout(updateTimer, 1000);
-    }
-
-    if (lockoutActive) {
       updateTimer();
+      setInterval(updateTimer, 1000);
     }
   </script>
 </body>
